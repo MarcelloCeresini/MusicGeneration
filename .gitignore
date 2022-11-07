@@ -9,3 +9,6 @@ venv.bak/
 
 # Folders
 data
+
+# pycache
+*/__pycache__

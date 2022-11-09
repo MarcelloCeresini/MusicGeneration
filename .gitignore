@@ -12,3 +12,4 @@ data
 
 # pycache
 */__pycache__
+.cache

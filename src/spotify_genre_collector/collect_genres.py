@@ -7,6 +7,12 @@ from pathlib import Path
 import muspy
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
+import argparse
+
+def parse_args():
+    args = argparse.ArgumentParser()
+    args.add_argument('--restart_from_0', '-dr', action='store_true')
+    return args.parse_args()
 
 def get_genres(spotify, artist_name):
     results = spotify.search(q='artist:' + artist_name, limit=1, type='artist')
@@ -51,8 +57,31 @@ def get_track_artist_title_and_ids(music_track, lakh_msd_match, msd_tracks):
     names = msd_tracks[msd_tracks['track_id'] == msd_track_id][['artist_name', 'song_name']]
     return names['artist_name'].values[0], names['song_name'].values[0], track_id, msd_track_id
 
+def reload_past_state(restart=False):
+    if restart:
+        restart_counter = 0
+        track_genre_match = {}
+    else:
+        # Get the restart counter 
+        with open('index.txt', 'r') as f:
+            restart_counter = int(f.readline().rstrip())
+        # Also collect the saved dictionary of matches ID --> genre
+        with open('ids_to_genres.json', 'r') as f:
+            track_genre_match = json.load(f)
+    return track_genre_match, restart_counter
+
+def save_progress(track_genre_match, i):
+    # Save the matches track_id -> genres
+    with open('ids_to_genres.json', 'w') as f:
+        json.dump(track_genre_match, f)
+    # Save the index at which we managed to arrive
+    with open('index.txt', 'w') as f:
+        f.write(str(i))
+
 if __name__ == '__main__':
-    track_genre_match = {}
+    args = parse_args()
+    track_genre_match, restart_counter = reload_past_state(args.restart_from_0)
+    print(f"Skipping the first {restart_counter} songs and restoring old dictionary...")
     # Load the .env file where credentials are tracked.
     # We need to have both a SPOTIPY_CLIENT_ID and SPOTIPY_CLIENT_SECRET
     load_dotenv()
@@ -65,7 +94,10 @@ if __name__ == '__main__':
     # artist names for each track
     lakh_msd_match, msd_tracks = load_match_dataframes()
     # Iterate over the music in the dataset
-    for music_track in tqdm(lakh_matched_dataset):
+    for i, music_track in enumerate(tqdm(lakh_matched_dataset)):
+        # Skip the first restart_counter elements
+        while i < restart_counter:
+            continue
         # Try to obtain artist name
         artist_name, song_name, track_id, msd_track_id = \
             get_track_artist_title_and_ids(music_track, lakh_msd_match, msd_tracks)
@@ -74,6 +106,8 @@ if __name__ == '__main__':
             artist_genres = get_genres(spotify, artist_name)
             print(f"\nFound genres {artist_genres} for track {song_name}")
             track_genre_match[track_id] = artist_genres
-    # Save the matches track_id -> genres
-    with open('ids_to_genres.json', 'w') as f:
-        json.dump(track_genre_match, f)
+        # Check if it's time to save
+        if i % 100 == 0:
+            save_progress(track_genre_match, i)
+    # Final save
+    save_progress(track_genre_match, i)

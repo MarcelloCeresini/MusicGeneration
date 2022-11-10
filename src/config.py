@@ -7,6 +7,11 @@ class Config:
         ### config_string for ablation
         self.config_string = config_string
 
+        if config_string == "complete":
+            self.tuple_size = 12
+        elif config_string == "single_instruments_type":
+            self.tuple_size = 11
+
         # PATHS
         self.DATA_PATH = os.path.join(ROOT_PATH, "data/")
         self.dataset_paths = {
@@ -18,6 +23,8 @@ class Config:
         }
 
         self.N_CPUS = os.cpu_count()
+
+
         # tempo definition
         max_tempo = 256
         min_tempo = 16
@@ -26,3 +33,32 @@ class Config:
 
         self.tempos = [min_tempo * r**i for i in range(num_tempos)]
         self.np_tempos = np.asarray(self.tempos)
+
+
+        # duration definition
+        np_durations = np.zeros(300)
+        i = 0
+        note_l = 1/2
+
+        for _ in range(int(256/16)):
+            while np_durations[i] < note_l:
+                i+=1
+                np_durations[i] = np_durations[i-1] + (note_l/32)
+            note_l *= 2
+
+        self.np_durations = np_durations[1:129+8]
+
+
+        # position definition
+        np_positions = np.zeros(128)
+        for i in range(len(np_positions)-1):
+            np_positions[i+1] = np_positions[i] + 1/128
+        
+        self.np_positions = np_positions
+
+        
+        # time_signature definition
+        self.numerators = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 132]
+        self.denominators = [1, 2, 4, 8, 16, 32, 64, 128]
+        self.tot_numerators = len(self.numerators)
+        self.tot_denominators = len(self.denominators)

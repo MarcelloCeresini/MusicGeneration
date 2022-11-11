@@ -109,12 +109,18 @@ def key_sign_repr(key_sign: Tuple, measure: int, conf: config.Config = None) -> 
 
 
 def time_sign_map(time_sign: Tuple, conf: config.Config = None) -> int:
-    return conf.numerators.index(time_sign[0]) + conf.denominators.index(time_sign[1])*conf.tot_numerators
+    if time_sign[0] in conf.numerators and time_sign[1] in conf.denominators:
+        return conf.numerators.index(time_sign[0]) + conf.denominators.index(time_sign[1])*conf.tot_numerators
+    else:
+        return False
 
 
 def time_sign_repr(time_sign: Tuple, measure: int, conf: config.Config) -> Tuple:
     '''Create time_sign map from standard muspy to ours'''
     time_sign_index = time_sign_map(time_sign, conf)
+
+    if time_sign_index == False:
+        return False
 
     if conf.config_string == "complete":
         return (5, measure, 0, 0, 0, 0, 0, 0, 0, 0, time_sign_index, 0)
@@ -214,7 +220,7 @@ def add_notes(final_song: list, notes: np.array, settings: dict, t_init: int, me
         )
 
 
-def transform_representation(song: muspy.music.Music, conf: config.Config, verbose=0) -> np.array:
+def transform_representation(song: muspy.music.Music, conf: config.Config, verbose=0) -> np.ndarray:
 
     '''
     This function accepts as input a song in the muspy format and transforms it in a series of tuples written in the following way
@@ -259,6 +265,11 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
     if type = 7 --> all values 0, end of the representation
 
 
+    Returns:
+    - [0]           if song empty
+    - [1]           if there are time_signatures not accepted by our discretization
+    - [2]           if the song is too long (>256 measures)
+    - final_song    if everything works well
     '''
     
     # list of all notes/events
@@ -269,7 +280,7 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
     # start of song
     final_song.append(tuple([0]*conf.tuple_size))
 
-    if all([True if len(track.notes)<=0 else False for track in song.tracks]): return [] ########
+    if all([True if len(track.notes)<=0 else False for track in song.tracks]): return [0] ########
 
     for track in song.tracks:
         programs = []
@@ -300,7 +311,7 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
             tmp = time_sign_repr(current_time_sign, measure = 0, conf = conf)
             # we do not accept all the time signatures, all the songs that use different ones are rejected
             if tmp == False:
-                return [] #########
+                return [1] #########
             else:
                 final_song.append(tmp)
         else:
@@ -399,7 +410,12 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
 
                 new_settings["key_sign"] = (event[2], event[3]) # note, major/minor
 
-                current_event = key_sign_repr(new_settings["key_sign"], conf)
+                current_event = key_sign_repr(
+                    new_settings["key_sign"],
+                    (event[0] - current_time) // current_settings["measure"] + current_measure_index,
+                    conf
+                )
+
                 flag_new_event = True
 
         if event[1] == "time_sign":
@@ -409,21 +425,40 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
                 new_settings["time_sign"] = (event[2], event[3]) # numerator, denominator
                 new_settings["measure"] = event[2] * resolution # measure length changes (only) if numerator changes
 
-                current_event = time_sign_repr(new_settings["time_sign"], conf)
-                flag_new_event = True
+                current_event = time_sign_repr(
+                    new_settings["time_sign"],
+                    (event[0] - current_time) // current_settings["measure"] + current_measure_index,
+                    conf
+                )
+
+                # the time_signature could be rejected, we do not accept all possible ones
+                if current_event == False:
+                    return [1]
+                else:
+                    flag_new_event = True
         
         if event[1] == "tempo":
             if event[2] != current_settings["tempo"]:
-                new_settings["time_sign"] = event[2] # qpm
-                current_event = tempo_repr(new_settings["time_sign"], conf)
+
+                new_settings["tempo"] = event[2] # qpm
+
+                current_event = tempo_repr(
+                    new_settings["tempo"],
+                    (event[0] - current_time) // current_settings["measure"] + current_measure_index,
+                    conf
+                )
                 flag_new_event = True
 
 
         if flag_new_event:
             
-            assert (delta_t := (event[0]-current_time) % current_measure_length) == 0, "The MIDI or the algorithm are wrong, events should happen only at the beginning of measures"
+            if (delta_t := (event[0]-current_time) % current_measure_length) != 0:
+                # print(song.metadata)
+                # print(events)
+                pass
 
             # if the event happens in the middle of a beat because midi is "wrong" --> move the event to the beginning of THAT measure (not the following one)
+            # every note will be positioned with respect to this new timestep (measures, beats and positions are shifted)
             time_interval = current_time - (event[0] - delta_t)
 
             # shouldn't do anything if there are no notes between current time and t+delta_t
@@ -457,8 +492,17 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
 
     # we save npy in uint8, so all the parts of the tuples must be <258
     # (beat is <132 that is the biggest numerator accepted in time signatures)
-    if current_measure_index > 255: return []
+    if current_measure_index > 255: return [2]
 
     # add end of song
     final_song.append(tuple([7]+[0]*(conf.tuple_size-1)))   
-    return np.stack(final_song)
+    return np.stack(final_song).astype(dtype=np.uint8)
+
+
+def map_dataset_to_label(string: str):
+    if string == "folk":
+        return np.array(0, dtype=np.uint8)
+    if string == "nes":
+        return np.array(1, dtype=np.uint8)
+    if string == "maestro":
+        return np.array(2, dtype=np.uint8)

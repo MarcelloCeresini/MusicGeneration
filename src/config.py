@@ -64,3 +64,6 @@ class Config:
         self.denominators = [1, 2, 4, 8, 16, 32, 64, 128]
         self.tot_numerators = len(self.numerators)
         self.tot_denominators = len(self.denominators)
+
+
+        self.tf_data_path = os.path.join(self.DATA_PATH, "tf_data")

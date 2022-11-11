@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 import muspy
 import spotipy
+import requests
 from spotipy.oauth2 import SpotifyClientCredentials
 import argparse
 
@@ -15,12 +16,18 @@ def parse_args():
     return args.parse_args()
 
 def get_genres(spotify, artist_name):
-    results = spotify.search(q='artist:' + artist_name, limit=1, type='artist')
-    print(results)
-    if len(results['artists']['items']) > 0:
-        return results['artists']['items'][0]['genres']
-    else:
+    retry_counter = 0
+    while retry_counter < 5:
+        try:
+            results = spotify.search(q='artist:' + artist_name, limit=1, type='artist')
+            break
+        except requests.exceptions.ReadTimeout:
+            print(f"Timeout happened. Retrying ({i}/5)...")
+            retry_counter += 1
+    if retry_counter >= 5 or len(results['artists']['items']) == 0 :
         return []
+    print(results)
+    return results['artists']['items'][0]['genres']
 
 def load_match_dataframes():
     lakh_msd_match = pd.read_csv('matched_ids.txt', sep=';',
@@ -96,7 +103,7 @@ if __name__ == '__main__':
     # Iterate over the music in the dataset
     for i, music_track in enumerate(tqdm(lakh_matched_dataset)):
         # Skip the first restart_counter elements
-        while i < restart_counter:
+        if i < restart_counter:
             continue
         # Try to obtain artist name
         artist_name, song_name, track_id, msd_track_id = \

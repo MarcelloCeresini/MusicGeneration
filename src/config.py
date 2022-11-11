@@ -11,6 +11,8 @@ class Config:
             self.tuple_size = 12
         elif config_string == "single_instruments_type":
             self.tuple_size = 11
+        else:
+            raise ValueError("Not implemented yet")
 
         # PATHS
         self.DATA_PATH = os.path.join(ROOT_PATH, "data/")

@@ -98,7 +98,7 @@ def key_sign_map(key_sign: Tuple, conf: config.Config) -> int:
     return key_sign[0] + 12*c
 
 
-def key_sign_repr(key_sign: Tuple, measure: int, conf: config.Config) -> Tuple:
+def key_sign_repr(key_sign: Tuple, measure: int, conf: config.Config = None) -> Tuple:
     '''Create key_sign map from standard muspy to ours'''
     key_sign_index = key_sign_map(key_sign, conf)
 
@@ -108,7 +108,7 @@ def key_sign_repr(key_sign: Tuple, measure: int, conf: config.Config) -> Tuple:
         return (4, measure, 0, 0, 0, 0, 0, 0, key_sign_index, 0, 0)
 
 
-def time_sign_map(time_sign: Tuple, conf: config.Config) -> int:
+def time_sign_map(time_sign: Tuple, conf: config.Config = None) -> int:
     return conf.numerators.index(time_sign[0]) + conf.denominators.index(time_sign[1])*conf.tot_numerators
 
 
@@ -121,10 +121,13 @@ def time_sign_repr(time_sign: Tuple, measure: int, conf: config.Config) -> Tuple
     elif conf.config_string == "single_instruments_type":
         return (5, measure, 0, 0, 0, 0, 0, 0, 0, time_sign_index, 0)
 
+def tempo_map(tempo: float, conf: config.Config = None) -> int:
+    return np.argmin(np.abs(conf.np_tempos - tempo))
 
-def tempo_repr(tempo: float, measure: int, conf: config.Config) -> Tuple:
+
+def tempo_repr(tempo: float, measure: int, conf: config.Config = None) -> Tuple:
     '''Create tempo map from standard muspy to ours'''
-    tempo_index = conf.np_tempos[np.argmin(np.abs(conf.np_tempos - tempo))]
+    tempo_index = tempo_map(tempo, conf)
 
     if conf.config_string == "complete":
         return (6, measure, 0, 0, 0, 0, 0, 0, 0, 0, 0, tempo_index)
@@ -132,7 +135,7 @@ def tempo_repr(tempo: float, measure: int, conf: config.Config) -> Tuple:
         return (6, measure, 0, 0, 0, 0, 0, 0, 0, 0, tempo_index)
 
 
-def add_notes(final_song: list, notes: np.array, settings: dict, t_init: int, measure_init: int, time_interval: int, conf: config.Config):
+def add_notes(final_song: list, notes: np.array, settings: dict, t_init: int, measure_init: int, time_interval: int, conf: config.Config, debug=False):
     '''
     Central function that translates each note from current note to next "event" into its tuple representation
     
@@ -149,9 +152,9 @@ def add_notes(final_song: list, notes: np.array, settings: dict, t_init: int, me
     i = 0
     while i < len(notes):
         note = notes[i]
-        if note[0] >= t_init + time_interval:
-            break
         i+=1
+        if note[0] >= t_init + time_interval:
+            break # should go into the second return
 
         if conf.config_string == "complete":
             # final_song.append((
@@ -178,20 +181,30 @@ def add_notes(final_song: list, notes: np.array, settings: dict, t_init: int, me
                 (note[0] - t_init) // settings["measure"] + measure_init,
                 ((note[0] - t_init) % settings["measure"]) // settings["beat"],
                 # position is defined as a fraction of a beat --> find the float [0,1] dividing time for beat, and find the closest fraction
-                conf.np_positions[np.argmin(np.abs(
+                np.argmin(np.abs(
                     conf.np_positions -
-                    (((note[0] - t_init) % settings["measure"]) % settings["beat"]) / settings["resolution"]))],
-                conf.np_durations[np.argmin(np.abs(conf.np_durations - note[2]))],
+                    ((note[0] - t_init) % settings["measure"]) % settings["beat"])),
+                np.argmin(np.abs(conf.np_durations - note[2])),
                 note[1],
                 note[4],
                 note[3],
-                settings["key_sign"],
-                settings["time_sign"],
-                settings["beat"]
+                key_sign_map(settings["key_sign"], conf),
+                time_sign_map(settings["time_sign"], conf),
+                tempo_map(settings["tempo"], conf)
             ))
     
-    if i == len(notes):
-        return final_song
+    if debug:
+        if i < len(notes):
+            print(t_init, time_interval, notes[i][0], t_init+time_interval)
+            print(t_init, time_interval, notes[i+1][0], t_init+time_interval)
+            print(len(notes))
+            print(i)
+
+    if i >= len(notes):
+        return (
+            final_song, 
+            final_song[-1][1] # the final measure --> cannot be more than 255
+        )
     else:
         return (
             final_song,
@@ -201,7 +214,7 @@ def add_notes(final_song: list, notes: np.array, settings: dict, t_init: int, me
         )
 
 
-def transform_representation(song: muspy.music.Music, conf: config.Config, verbose=0):
+def transform_representation(song: muspy.music.Music, conf: config.Config, verbose=0) -> np.array:
 
     '''
     This function accepts as input a song in the muspy format and transforms it in a series of tuples written in the following way
@@ -210,11 +223,11 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
     (
         type,               # see below -->                                                 [0, 7] -->                                              8
         measure,            # index of the measure inside the song in interval -->          [0, last_measure] -->                                   512?
-        beat,               # index of beat inside measure -->                              [0, numerator of time_signature] -->                    ??
+        beat,               # index of beat inside measure -->                              [0, numerator of time_signature] -->                    132 (max numerator allowed)
         position,           # index with 1/64 beat length granularity -->                   [0, 63/64] -->                                          64
         duration,           # hierarchical structure? -->                                   [0, ~50] -->                                            136                                  
         pitch,              # height of pitch (128) + drums (another 128) -->               [0, 255] -->                                            256
-        instrument_type,    # 128 instrument types dr -->                        [0, 128] -->                                            129
+        instrument_type,    # 128 instrument types dr -->                                   [0, 128] -->                                            129
         n_instrument(*),    # same instrument twice in the song for multiple voices -->     [0, 7??] -->                                            8
         velocity,           # amplitude of note, strength of play -->                       [0, 127] -->                                            128
         key_sign,           # [0,11] (all possible notes) and [maj,min] -->                 [0, 23] -->                                             24
@@ -253,17 +266,19 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
 
     final_song = []
 
-    # start song
+    # start of song
     final_song.append(tuple([0]*conf.tuple_size))
 
-    if all([len(track.notes) for track in song.tracks] <= 0): REJECT_SONG = True
+    if all([True if len(track.notes)<=0 else False for track in song.tracks]): return [] ########
 
     for track in song.tracks:
         programs = []
         if len(track.notes)>0 and (track.program not in set(programs)):
             # different conf_string may change this ####################################
+            # add each instrument with (1, 0, 0, 0, 0, 0, program, 0, 0, 0, 0)
             final_song.append(tuple([1]+ [0]*5 +[track.program]+ [0]*4 ))
 
+    # start of events
     final_song.append(tuple([2]+[0]*(conf.tuple_size-1)))
 
     events = []
@@ -273,24 +288,37 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
 
     for i, key_sign in enumerate(song.key_signatures):
         if i == 0:
-            current_key_sign = (key_sign.key, key_sign.major_minor)
+            current_key_sign = (key_sign.root, key_sign.mode)
             final_song.append(key_sign_repr(current_key_sign, measure = 0, conf = conf))
         else:
-            events.append((key_sign.time, "key_sign", key_sign.key, key_sign.major_minor))
+            events.append((key_sign.time, "key_sign", key_sign.root, key_sign.mode))
 
     for i, time_sign in enumerate(song.time_signatures):
         if i == 0:
             current_time_sign = (time_sign.numerator, time_sign.denominator)
-            final_song.append(time_sign_repr(current_time_sign, measure = 0, conf = conf))
+
+            tmp = time_sign_repr(current_time_sign, measure = 0, conf = conf)
+            # we do not accept all the time signatures, all the songs that use different ones are rejected
+            if tmp == False:
+                return [] #########
+            else:
+                final_song.append(tmp)
         else:
             events.append((time_sign.time, "time_sign", time_sign.numerator, time_sign.denominator))
 
-    for i, tempo in enumerate(song.beats):
+    for i, tempo in enumerate(song.tempos):
         if i == 0:
             current_tempo = tempo.qpm
             final_song.append(tempo_repr(current_tempo, measure = 0, conf = conf))
         else:
             events.append((tempo.time, "tempo", tempo.qpm))
+
+    if len(song.key_signatures) == 0:
+        current_key_sign = (0, "major") # default if there is not even one specified in the song
+    if len(song.time_signatures) == 0:
+        current_time_sign = (4, 4) # same
+    if len(song.tempos) == 0:
+        current_tempo = 120 # same
 
     # sort events by timestep
     events.sort(key = lambda x: x[0])
@@ -315,25 +343,21 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
             5
         ))
 
-
-    i = 0
     for track in song.tracks:
         if track.is_drum:
-            for note in track.notes:
+            for i, note in enumerate(track.notes):
                 notes[i, 0] = note.time
                 notes[i, 1] = note.pitch + 128
                 notes[i, 2] = note.duration
                 notes[i, 3] = note.velocity
                 notes[i, 4] = track.program
-                i+=1
         else:
-            for note in track.notes:
+            for i, note in enumerate(track.notes):
                 notes[i, 0] = note.time
                 notes[i, 1] = note.pitch
                 notes[i, 2] = note.duration
                 notes[i, 3] = note.velocity
                 notes[i, 4] = track.program
-                i+=1
 
     # sort them by the 0th column, the time
     notes = notes[notes[:,0].argsort()]
@@ -373,25 +397,25 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
             if event[2] != current_settings["key_sign"][0] or \
                 event[3] != current_settings["key_sign"][1]:
 
-                new_settings["key_sign"] = (event[2], event[3]) # numerator, denominator
-                new_settings["measure"] = event[3] * resolution
-                new_settings["beat"] = new_settings["measure"] / event[2]
+                new_settings["key_sign"] = (event[2], event[3]) # note, major/minor
 
-                current_event = key_sign_repr(new_settings["key_sign"])
+                current_event = key_sign_repr(new_settings["key_sign"], conf)
                 flag_new_event = True
 
         if event[1] == "time_sign":
             if event[2] != current_settings["time_sign"][0] or \
                 event[3] != current_settings["time_sign"][1]:
                 
-                new_settings["time_sign"] = (event[2], event[3]) # note, major/minor
-                current_event = time_sign_repr(new_settings["time_sign"])
+                new_settings["time_sign"] = (event[2], event[3]) # numerator, denominator
+                new_settings["measure"] = event[2] * resolution # measure length changes (only) if numerator changes
+
+                current_event = time_sign_repr(new_settings["time_sign"], conf)
                 flag_new_event = True
         
         if event[1] == "tempo":
             if event[2] != current_settings["tempo"]:
                 new_settings["time_sign"] = event[2] # qpm
-                current_event = tempo_repr(new_settings["time_sign"])
+                current_event = tempo_repr(new_settings["time_sign"], conf)
                 flag_new_event = True
 
 
@@ -415,18 +439,26 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
             
             current_settings = new_settings
             # beat is constant, onle measure length changes --> update it
-            current_settings["measure"] = current_settings["time_sign"][0] * resolution 
             final_song.append(current_event)
 
         i+=1
 
 
-    final_song = add_notes(
+    final_song, current_measure_index = add_notes(
         final_song,
         notes,
         current_settings,
         current_time,
         current_measure_index,
-        1000000, # just to be safe
-        conf
+        1e15, # just to be safe
+        conf,
+        debug=True
     ) # should append every note between current note and note finish
+
+    # we save npy in uint8, so all the parts of the tuples must be <258
+    # (beat is <132 that is the biggest numerator accepted in time signatures)
+    if current_measure_index > 255: return []
+
+    # add end of song
+    final_song.append(tuple([7]+[0]*(conf.tuple_size-1)))   
+    return np.stack(final_song)

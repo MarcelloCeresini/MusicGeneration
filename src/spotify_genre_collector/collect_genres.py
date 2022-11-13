@@ -1,5 +1,6 @@
 import os
 import json
+import time
 from tqdm import tqdm
 import pandas as pd
 from dotenv import load_dotenv
@@ -22,8 +23,12 @@ def get_genres(spotify, artist_name):
             results = spotify.search(q='artist:' + artist_name, limit=1, type='artist')
             break
         except requests.exceptions.ReadTimeout:
-            print(f"Timeout happened. Retrying ({i}/5)...")
+            print(f"Timeout happened. Retrying ({retry_counter}/5)...")
             retry_counter += 1
+            time.sleep(2)
+        except requests.exceptions.RetryError:
+            print(f"Retried too many times... Ignoring song")
+            retry_counter = 5
     if retry_counter >= 5 or len(results['artists']['items']) == 0 :
         return []
     print(results)

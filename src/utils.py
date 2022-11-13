@@ -9,7 +9,9 @@ import config
 
 def get_dataset(key: str, conf: config.Config) -> muspy.Dataset:
 
-    for dataset_path in (data_path := conf.dataset_paths):
+    data_path = conf.dataset_paths
+
+    for dataset_path in data_path.values():
         if not os.path.exists(dataset_path):
             os.mkdir(dataset_path)
 
@@ -20,15 +22,21 @@ def get_dataset(key: str, conf: config.Config) -> muspy.Dataset:
         else:
             return muspy.LakhMIDIDataset(data_path["lmd"], use_converted=True)
 
+    elif key == "lmd_matched":
+        path = data_path[key]
+        if len(os.listdir(path)) == 0:
+            return muspy.LakhMIDIMatchedDataset(path, download_and_extract=True, convert=True, n_jobs=conf.N_CPUS)
+        else:
+            return muspy.LakhMIDIMatchedDataset(path, use_converted=True)
 
-    if key == "maestro":
+    elif key == "maestro":
         if len(os.listdir(data_path["maestro"])) == 0:
             return muspy.MAESTRODatasetV3(data_path["maestro"], download_and_extract=True, convert=True, n_jobs=conf.N_CPUS)
         else:
             return muspy.MAESTRODatasetV3(data_path["maestro"], use_converted=True)
 
 
-    if key == "nes":
+    elif key == "nes":
         if len(os.listdir(data_path["nes"])) == 0:
             raise ImportError("Go download the archive at https://drive.google.com/file/d/1tyDEwe0exW4xU1W7ZzUMWoTv8K43jF_5/view and place it into root")
         
@@ -72,14 +80,14 @@ def get_dataset(key: str, conf: config.Config) -> muspy.Dataset:
             return muspy.FolderDataset(data_path["nes"], use_converted=True)
 
 
-    if key == "hymn":
+    elif key == "hymn":
         if len(os.listdir(data_path["hymn"])) == 0:
             return muspy.HymnalTuneDataset(data_path["hymn"], download=True, convert=True, n_jobs=conf.N_CPUS)
         else:
             return muspy.HymnalTuneDataset(data_path["hymn"], use_converted=True)
             
 
-    if key == "folk":
+    elif key == "folk":
         if len(os.listdir(data_path["folk"])) == 0:
             return muspy.NottinghamDatabase(data_path["folk"], download_and_extract=True, convert=True, n_jobs=conf.N_CPUS)
         else:
@@ -205,6 +213,7 @@ def add_notes(final_song: list, notes: np.array, settings: dict, t_init: int, me
             print(t_init, time_interval, notes[i+1][0], t_init+time_interval)
             print(len(notes))
             print(i)
+            raise ValueError("Something is wrong with the end of the song")
 
     if i >= len(notes):
         return (
@@ -398,6 +407,7 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
     current_time = 0
 
     while i < len(events):
+        assert current_time >= 0, "current_time {}".format(current_time)
         # add notes in between events --> the current configuration is important to define to which measure/beat they belong to
         event = events[i]
         # the dataset is not clean, sometimes it happens that the same event is repeated twice or more --> we want to make changes only when a NEW event occurs
@@ -459,7 +469,8 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
 
             # if the event happens in the middle of a beat because midi is "wrong" --> move the event to the beginning of THAT measure (not the following one)
             # every note will be positioned with respect to this new timestep (measures, beats and positions are shifted)
-            time_interval = current_time - (event[0] - delta_t)
+            time_interval = (event[0] - delta_t) - current_time
+            assert time_interval >= 0, "time interval: {}".format(time_interval)
 
             # shouldn't do anything if there are no notes between current time and t+delta_t
             final_song, notes, current_time, current_measure_index = add_notes( 
@@ -478,18 +489,25 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
 
         i+=1
 
+    try:
+        final_song, current_measure_index = add_notes(
+            final_song,
+            notes,
+            current_settings,
+            current_time,
+            current_measure_index,
+            1e15, # just to be safe
+            conf,
+            debug=True
+        ) # should append every note between current note and note finish
 
-    final_song, current_measure_index = add_notes(
-        final_song,
-        notes,
-        current_settings,
-        current_time,
-        current_measure_index,
-        1e15, # just to be safe
-        conf,
-        debug=True
-    ) # should append every note between current note and note finish
+    except:
+        print(final_song)
+        print(notes[0])
+        print(current_time)
+        print(song.metadata)
 
+    
     # we save npy in uint8, so all the parts of the tuples must be <258
     # (beat is <132 that is the biggest numerator accepted in time signatures)
     if current_measure_index > 255: return [2]
@@ -506,3 +524,5 @@ def map_dataset_to_label(string: str):
         return np.array(1, dtype=np.uint8)
     if string == "maestro":
         return np.array(2, dtype=np.uint8)
+    if string == "lmd_matched":
+        return np.array(3, dtype=np.uint8)

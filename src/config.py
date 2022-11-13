@@ -21,7 +21,8 @@ class Config:
             "maestro": os.path.join(self.DATA_PATH, "maestro/"),
             "nes": os.path.join(self.DATA_PATH, "nes/"),
             "hymn": os.path.join(self.DATA_PATH, "hymn/"),
-            "folk": os.path.join(self.DATA_PATH, "folk/")
+            "folk": os.path.join(self.DATA_PATH, "folk/"),
+            "lmd_matched": os.path.join(self.DATA_PATH, "lmd_matched/")
         }
 
         self.N_CPUS = os.cpu_count()

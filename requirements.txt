@@ -65,9 +65,11 @@ spacy-legacy==3.0.8
 spacy-loggers==1.0.1
 spotipy
 stack-data==0.5.1
+tensorflow>2
 thinc==8.0.13
 tornado==6.2
 tqdm==4.64.1
+transformers
 traitlets==5.5.0
 urllib3==1.26.12
 wcwidth==0.2.5

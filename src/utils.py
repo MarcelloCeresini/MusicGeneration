@@ -117,17 +117,17 @@ def key_sign_repr(key_sign: Tuple, measure: int, conf: config.Config = None) -> 
 
 
 def time_sign_map(time_sign: Tuple, conf: config.Config = None) -> int:
-    if time_sign[0] in conf.numerators and time_sign[1] in conf.denominators:
+    if (time_sign[0] in conf.numerators) and (time_sign[1] in conf.denominators):
         return conf.numerators.index(time_sign[0]) + conf.denominators.index(time_sign[1])*conf.tot_numerators
     else:
-        return False
+        return -1
 
 
 def time_sign_repr(time_sign: Tuple, measure: int, conf: config.Config) -> Tuple:
     '''Create time_sign map from standard muspy to ours'''
     time_sign_index = time_sign_map(time_sign, conf)
 
-    if time_sign_index == False:
+    if time_sign_index == -1:
         return False
 
     if conf.config_string == "complete":
@@ -164,9 +164,11 @@ def add_notes(final_song: list, notes: np.array, settings: dict, t_init: int, me
     '''
     
     i = 0
+
     while i < len(notes):
         note = notes[i]
         i+=1
+
         if note[0] >= t_init + time_interval:
             break # should go into the second return
 
@@ -207,19 +209,31 @@ def add_notes(final_song: list, notes: np.array, settings: dict, t_init: int, me
                 tempo_map(settings["tempo"], conf)
             ))
     
-    if debug:
-        if i < len(notes):
-            print(t_init, time_interval, notes[i][0], t_init+time_interval)
-            print(t_init, time_interval, notes[i+1][0], t_init+time_interval)
-            print(len(notes))
-            print(i)
-            raise ValueError("Something is wrong with the end of the song")
+    # if debug:
+    #     if i < len(notes):
+    #         print(t_init, time_interval, notes[i][0], t_init+time_interval)
+    #         print(t_init, time_interval, notes[i+1][0], t_init+time_interval)
+    #         print(len(notes))
+    #         print(i)
+    #         raise ValueError("Something is wrong with the end of the song")
 
-    if i >= len(notes):
+    # else:
+    #     if i >= len(notes):
+    #         print(t_init,  time_interval)
+    #         print(notes[-1][0])
+    #         print(i, len(notes))
+    #         raise ValueError("???")
+
+
+    if len(notes) == 0 or i >= len(notes):
+
         return (
-            final_song, 
+            final_song,
+            [],
+            t_init + time_interval,
             final_song[-1][1] # the final measure --> cannot be more than 255
         )
+    
     else:
         return (
             final_song,
@@ -289,7 +303,8 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
     # start of song
     final_song.append(tuple([0]*conf.tuple_size))
 
-    if all([True if len(track.notes)<=0 else False for track in song.tracks]): return [0] ########
+    if all([True if len(track.notes)<=0 else False for track in song.tracks]): 
+        return [0]
 
     for track in song.tracks:
         programs = []
@@ -406,10 +421,10 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
     # remember also the timestep at which we stopped
     current_time = 0
 
-    while i < len(events):
+    for event in events:
         assert current_time >= 0, "current_time {}".format(current_time)
         # add notes in between events --> the current configuration is important to define to which measure/beat they belong to
-        event = events[i]
+
         # the dataset is not clean, sometimes it happens that the same event is repeated twice or more --> we want to make changes only when a NEW event occurs
         flag_new_event = False
         new_settings = current_settings
@@ -431,20 +446,21 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
         if event[1] == "time_sign":
             if event[2] != current_settings["time_sign"][0] or \
                 event[3] != current_settings["time_sign"][1]:
-                
+
                 new_settings["time_sign"] = (event[2], event[3]) # numerator, denominator
                 new_settings["measure"] = event[2] * resolution # measure length changes (only) if numerator changes
-
+                
                 current_event = time_sign_repr(
                     new_settings["time_sign"],
                     (event[0] - current_time) // current_settings["measure"] + current_measure_index,
                     conf
                 )
-
+                    
                 # the time_signature could be rejected, we do not accept all possible ones
                 if current_event == False:
                     return [1]
                 else:
+
                     flag_new_event = True
         
         if event[1] == "tempo":
@@ -473,30 +489,36 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
             assert time_interval >= 0, "time interval: {}".format(time_interval)
 
             # shouldn't do anything if there are no notes between current time and t+delta_t
-            final_song, notes, current_time, current_measure_index = add_notes( 
-                final_song,
-                notes,
-                current_settings, 
-                current_time,
-                current_measure_index,
-                time_interval,
-                conf
-            )
-            
+            try:
+                final_song, notes, current_time, current_measure_index = add_notes( 
+                    final_song,
+                    notes,
+                    current_settings, 
+                    current_time,
+                    current_measure_index,
+                    time_interval,
+                    conf
+                )
+            except:
+                print(events)
+                print(notes[-10:])
+                print(song.metadata)
+
             current_settings = new_settings
             # beat is constant, onle measure length changes --> update it
             final_song.append(current_event)
 
-        i+=1
+
+    ### sometimes events have timesteps > than last note!
 
     try:
-        final_song, current_measure_index = add_notes(
+        final_song, _, _, current_measure_index = add_notes(
             final_song,
             notes,
             current_settings,
             current_time,
             current_measure_index,
-            1e15, # just to be safe
+            1e15, # just to be safe TODO improve it
             conf,
             debug=True
         ) # should append every note between current note and note finish

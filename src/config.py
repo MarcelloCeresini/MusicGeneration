@@ -68,3 +68,28 @@ class Config:
 
 
         self.tf_data_path = os.path.join(self.DATA_PATH, "tf_data")
+
+
+        ### MODEL CONFIGURATIONS
+        self.SEQ_LEN = 4092
+        self.TOKEN_DIM = 512
+        self.BATCH_SIZE = 2
+        self.SHUFFLE_SIZE = 256
+        self.PREFETCH_SIZE = 32
+
+        self.INPUT_RANGES = {
+            "type": 8,
+            "measure" : 256,
+            "beat": 133,
+            "position": 128,
+            "duration": 136,
+            "pitch": 256,
+            "instrument": 129,
+            "velocity": 128,
+            "key_sign": 24, # maybe 25 because a lot of times it's not indicated --> 0 could mean "nothing"
+            "time_sign": 153,
+            "tempo": 49
+        }
+
+        self.EMBEDDING_SIZE = 64
+        

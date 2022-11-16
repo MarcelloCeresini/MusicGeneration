@@ -548,3 +548,13 @@ def map_dataset_to_label(string: str):
         return np.array(2, dtype=np.uint8)
     if string == "lmd_matched":
         return np.array(3, dtype=np.uint8)
+            
+def one_hot_encode_labels_nmf(string: str):
+    if string == "folk":
+        return np.array((1, 0, 0), dtype=np.uint8)
+    elif string == "nes":
+        return np.array((0, 1, 0), dtype=np.uint8)
+    elif string == "maestro":
+        return np.array((0, 0, 1), dtype=np.uint8)
+    else:
+        raise ValueError("Not implemented")

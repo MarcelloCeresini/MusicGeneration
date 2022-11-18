@@ -3,8 +3,9 @@ import numpy as np
 import muspy
 import os, shutil, tarfile
 from tqdm import tqdm
-import config
+import transformers
 
+import config
 
 
 def get_dataset(key: str, conf: config.Config) -> muspy.Dataset:
@@ -558,3 +559,4 @@ def one_hot_encode_labels_nmf(string: str):
         return np.array((0, 0, 1), dtype=np.uint8)
     else:
         raise ValueError("Not implemented")
+

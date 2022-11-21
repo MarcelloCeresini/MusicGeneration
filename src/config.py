@@ -83,17 +83,16 @@ class Config:
         ### MODEL CONFIGURATIONS
 
         # DECODER
-        self.SEQ_LEN                        = 4092
+        self.SEQ_LEN                        = 6144
         self.TOKEN_DIM                      = 512
         self.ATTENTION_BLOCKS               = 2
         self.ATTENTION_HEADS                = 4
         self.DECODER_ACTIVATION_FUNCTION    = "relu"
 
         # EMBEDDING LAYERS
-        self.OUTPUT_SIZE = 64
+        self.SINGLE_EMB_SIZE = 64
 
         # DATASET CONFIGURATIONS
-
         self.BATCH_SIZE         = 2
         self.SHUFFLE_SIZE       = 256
         self.PREFETCH_SIZE      = 32
@@ -101,7 +100,7 @@ class Config:
         self.INPUT_RANGES = {
             "type": 8,
             "measure" : 256,
-            "beat": 133,
+            "beat": 131,
             "position": 128,
             "duration": 136,
             "pitch": 256,
@@ -112,8 +111,22 @@ class Config:
             "tempo": 49
         }
 
-        self.EMBEDDING_SIZE = 64
-        
+        self.embedding_layers = [
+            tf.keras.layers.Embedding(self.INPUT_RANGES["type"],        self.SINGLE_EMB_SIZE),
+            tf.keras.layers.Embedding(self.INPUT_RANGES["measure"],     self.SINGLE_EMB_SIZE),
+            tf.keras.layers.Embedding(self.INPUT_RANGES["beat"],        self.SINGLE_EMB_SIZE),
+            tf.keras.layers.Embedding(self.INPUT_RANGES["position"],    self.SINGLE_EMB_SIZE),
+            tf.keras.layers.Embedding(self.INPUT_RANGES["duration"],    self.SINGLE_EMB_SIZE),
+            tf.keras.layers.Embedding(self.INPUT_RANGES["pitch"],       self.SINGLE_EMB_SIZE),
+            tf.keras.layers.Embedding(self.INPUT_RANGES["instrument"],  self.SINGLE_EMB_SIZE),
+            tf.keras.layers.Embedding(self.INPUT_RANGES["velocity"],    self.SINGLE_EMB_SIZE),
+            tf.keras.layers.Embedding(self.INPUT_RANGES["key_sign"],    self.SINGLE_EMB_SIZE),
+            tf.keras.layers.Embedding(self.INPUT_RANGES["time_sign"],   self.SINGLE_EMB_SIZE),
+            tf.keras.layers.Embedding(self.INPUT_RANGES["tempo"],       self.SINGLE_EMB_SIZE)
+        ]
+
+        self.TOKEN_DIM = self.SINGLE_EMB_SIZE * len(self.embedding_layers)
+
         # Custom configuration for using GPT2 as a standard transformer decoder
         self.decoder_config = transformers.GPT2Config(
             vocab_size=0, 
@@ -123,36 +136,51 @@ class Config:
             n_head = self.ATTENTION_HEADS, 
             activation_function='relu'
         )
+        
+        self.output_dense_layers = [
+            tf.keras.layers.Dense(self.INPUT_RANGES["type"]),
+            tf.keras.layers.Dense(self.INPUT_RANGES["measure"]),
+            tf.keras.layers.Dense(self.INPUT_RANGES["beat"]),
+            tf.keras.layers.Dense(self.INPUT_RANGES["position"]),
+            tf.keras.layers.Dense(self.INPUT_RANGES["duration"]),
+            tf.keras.layers.Dense(self.INPUT_RANGES["pitch"]),
+            tf.keras.layers.Dense(self.INPUT_RANGES["instrument"]),
+            tf.keras.layers.Dense(self.INPUT_RANGES["velocity"]),
+            tf.keras.layers.Dense(self.INPUT_RANGES["key_sign"]),
+            tf.keras.layers.Dense(self.INPUT_RANGES["time_sign"]),
+            tf.keras.layers.Dense(self.INPUT_RANGES["tempo"])
+        ]
+    
+        self.full_mask = [
+            np.asarray([True]*self.INPUT_RANGES["type"], dtype=bool),
+            np.asarray([True]*self.INPUT_RANGES["measure"], dtype=bool),
+            np.asarray([True]*self.INPUT_RANGES["beat"], dtype=bool),
+            np.asarray([True]*self.INPUT_RANGES["position"], dtype=bool),
+            np.asarray([True]*self.INPUT_RANGES["duration"], dtype=bool),
+            np.asarray([True]*self.INPUT_RANGES["pitch"], dtype=bool),
+            np.asarray([True]*self.INPUT_RANGES["instrument"], dtype=bool),
+            np.asarray([True]*self.INPUT_RANGES["velocity"], dtype=bool),
+            np.asarray([True]*self.INPUT_RANGES["key_sign"], dtype=bool),
+            np.asarray([True]*self.INPUT_RANGES["time_sign"], dtype=bool),
+            np.asarray([True]*self.INPUT_RANGES["tempo"], dtype=bool),
+        ]
 
-        self.embedding_layers = [
-            # Style embedding
-            tf.keras.layers.Dense(self.OUTPUT_SIZE),
-            # Type embedding
-            tf.keras.layers.Embedding(self.INPUT_RANGES["type"], self.OUTPUT_SIZE, input_length=self.SEQ_LEN),
-            # Measure embedding
-            tf.keras.layers.Embedding(self.INPUT_RANGES["measure"], self.OUTPUT_SIZE, input_length=self.SEQ_LEN),
-            # Beat embedding
-            tf.keras.layers.Embedding(self.INPUT_RANGES["beat"], self.OUTPUT_SIZE, input_length=self.SEQ_LEN),
-            # Position embedding
-            tf.keras.layers.Embedding(self.INPUT_RANGES["position"], self.OUTPUT_SIZE, input_length=self.SEQ_LEN),
-            # Duration embedding
-            tf.keras.layers.Embedding(self.INPUT_RANGES["duration"], self.OUTPUT_SIZE, input_length=self.SEQ_LEN),
-            # Pitch embedding
-            tf.keras.layers.Embedding(self.INPUT_RANGES["pitch"], self.OUTPUT_SIZE, input_length=self.SEQ_LEN),
-            # Instrument embedding
-            tf.keras.layers.Embedding(self.INPUT_RANGES["instrument"], self.OUTPUT_SIZE, input_length=self.SEQ_LEN),
-            # Velocity embedding
-            tf.keras.layers.Embedding(self.INPUT_RANGES["velocity"], self.OUTPUT_SIZE, input_length=self.SEQ_LEN),
-            # Key sign embedding
-            tf.keras.layers.Embedding(self.INPUT_RANGES["key_sign"], self.OUTPUT_SIZE, input_length=self.SEQ_LEN),
-            # Time sign embedding
-            tf.keras.layers.Embedding(self.INPUT_RANGES["time_sign"], self.OUTPUT_SIZE, input_length=self.SEQ_LEN),
-            # Tempo embedding
-            tf.keras.layers.Embedding(self.INPUT_RANGES["tempo"], self.OUTPUT_SIZE, input_length=self.SEQ_LEN)
+        self.default_mask = [
+            np.asarray([True] + [False]*(self.INPUT_RANGES["type"]-1), dtype=bool),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["measure"]-1), dtype=bool),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["beat"]-1), dtype=bool),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["position"]-1), dtype=bool),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["duration"]-1), dtype=bool),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["pitch"]-1), dtype=bool),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["instrument"]-1), dtype=bool),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["velocity"]-1), dtype=bool),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["key_sign"]-1), dtype=bool),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["time_sign"]-1), dtype=bool),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["tempo"]-1), dtype=bool)
         ]
 
 
-    
+
     def get_decoder(self):
         '''
         Instantiate decoder from its corresponding configuration
@@ -168,3 +196,7 @@ class Config:
                 PE[pos,2*i]   = math.sin(pos/(10000**(2*i/self.TOKEN_DIM)))
                 PE[pos,2*i+1] = math.cos(pos/(10000**(2*i/self.TOKEN_DIM)))
         return PE
+
+    
+    def get_max_beat_from_time_sign(self, time_sign):
+        return self.numerators[time_sign % self.tot_numerators] - 1 

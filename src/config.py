@@ -125,8 +125,6 @@ class Config:
             tf.keras.layers.Embedding(self.INPUT_RANGES["tempo"],       self.SINGLE_EMB_SIZE)
         ]
 
-        self.TOKEN_DIM = self.SINGLE_EMB_SIZE * len(self.embedding_layers)
-
         # Custom configuration for using GPT2 as a standard transformer decoder
         self.decoder_config = transformers.GPT2Config(
             vocab_size=0, 

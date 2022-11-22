@@ -106,7 +106,7 @@ class Config:
             "pitch": 256,
             "instrument": 129,
             "velocity": 128,
-            "key_sign": 24, # maybe 25 because a lot of times it's not indicated --> 0 could mean "nothing"
+            "key_sign": 24+1,
             "time_sign": 153,
             "tempo": 49
         }

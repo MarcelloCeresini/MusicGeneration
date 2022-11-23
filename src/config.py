@@ -111,6 +111,8 @@ class Config:
             "tempo": 49
         } # tot=1399
 
+        self.input_ranges_sum = sum(self.INPUT_RANGES.values())
+
         self.embedding_layers = [
             tf.keras.layers.Embedding(self.INPUT_RANGES["type"],        self.SINGLE_EMB_SIZE),
             tf.keras.layers.Embedding(self.INPUT_RANGES["measure"],     self.SINGLE_EMB_SIZE),
@@ -150,31 +152,31 @@ class Config:
         ]
     
         self.full_mask = [
-            np.asarray([True]*self.INPUT_RANGES["type"], dtype=bool),
-            np.asarray([True]*self.INPUT_RANGES["measure"], dtype=bool),
-            np.asarray([True]*self.INPUT_RANGES["beat"], dtype=bool),
-            np.asarray([True]*self.INPUT_RANGES["position"], dtype=bool),
-            np.asarray([True]*self.INPUT_RANGES["duration"], dtype=bool),
-            np.asarray([True]*self.INPUT_RANGES["pitch"], dtype=bool),
-            np.asarray([True]*self.INPUT_RANGES["instrument"], dtype=bool),
-            np.asarray([True]*self.INPUT_RANGES["velocity"], dtype=bool),
-            np.asarray([True]*self.INPUT_RANGES["key_sign"], dtype=bool),
-            np.asarray([True]*self.INPUT_RANGES["time_sign"], dtype=bool),
-            np.asarray([True]*self.INPUT_RANGES["tempo"], dtype=bool),
+            tf.constant([[True]*self.INPUT_RANGES["type"]], dtype=tf.dtypes.bool),
+            tf.constant([[True]*self.INPUT_RANGES["measure"]],dtype=tf.dtypes.bool),
+            tf.constant([[True]*self.INPUT_RANGES["beat"]],dtype=tf.dtypes.bool),
+            tf.constant([[True]*self.INPUT_RANGES["position"]],dtype=tf.dtypes.bool),
+            tf.constant([[True]*self.INPUT_RANGES["duration"]],dtype=tf.dtypes.bool),
+            tf.constant([[True]*self.INPUT_RANGES["pitch"]],dtype=tf.dtypes.bool),
+            tf.constant([[True]*self.INPUT_RANGES["instrument"]],dtype=tf.dtypes.bool),
+            tf.constant([[True]*self.INPUT_RANGES["velocity"]],dtype=tf.dtypes.bool),
+            tf.constant([[True]*self.INPUT_RANGES["key_sign"]],dtype=tf.dtypes.bool),
+            tf.constant([[True]*self.INPUT_RANGES["time_sign"]],dtype=tf.dtypes.bool),
+            tf.constant([[True]*self.INPUT_RANGES["tempo"]], dtype=tf.dtypes.bool)
         ]
 
         self.default_mask = [
-            np.asarray([True] + [False]*(self.INPUT_RANGES["type"]-1), dtype=bool),
-            np.asarray([True] + [False]*(self.INPUT_RANGES["measure"]-1), dtype=bool),
-            np.asarray([True] + [False]*(self.INPUT_RANGES["beat"]-1), dtype=bool),
-            np.asarray([True] + [False]*(self.INPUT_RANGES["position"]-1), dtype=bool),
-            np.asarray([True] + [False]*(self.INPUT_RANGES["duration"]-1), dtype=bool),
-            np.asarray([True] + [False]*(self.INPUT_RANGES["pitch"]-1), dtype=bool),
-            np.asarray([True] + [False]*(self.INPUT_RANGES["instrument"]-1), dtype=bool),
-            np.asarray([True] + [False]*(self.INPUT_RANGES["velocity"]-1), dtype=bool),
-            np.asarray([True] + [False]*(self.INPUT_RANGES["key_sign"]-1), dtype=bool),
-            np.asarray([True] + [False]*(self.INPUT_RANGES["time_sign"]-1), dtype=bool),
-            np.asarray([True] + [False]*(self.INPUT_RANGES["tempo"]-1), dtype=bool)
+            tf.constant([[True] + [False]*(self.INPUT_RANGES["type"]-1)], dtype=tf.dtypes.bool),
+            tf.constant([[True] + [False]*(self.INPUT_RANGES["measure"]-1)], dtype=tf.dtypes.bool),
+            tf.constant([[True] + [False]*(self.INPUT_RANGES["beat"]-1)], dtype=tf.dtypes.bool),
+            tf.constant([[True] + [False]*(self.INPUT_RANGES["position"]-1)], dtype=tf.dtypes.bool),
+            tf.constant([[True] + [False]*(self.INPUT_RANGES["duration"]-1)], dtype=tf.dtypes.bool),
+            tf.constant([[True] + [False]*(self.INPUT_RANGES["pitch"]-1)], dtype=tf.dtypes.bool),
+            tf.constant([[True] + [False]*(self.INPUT_RANGES["instrument"]-1)], dtype=tf.dtypes.bool),
+            tf.constant([[True] + [False]*(self.INPUT_RANGES["velocity"]-1)], dtype=tf.dtypes.bool),
+            tf.constant([[True] + [False]*(self.INPUT_RANGES["key_sign"]-1)], dtype=tf.dtypes.bool),
+            tf.constant([[True] + [False]*(self.INPUT_RANGES["time_sign"]-1)], dtype=tf.dtypes.bool),
+            tf.constant([[True] + [False]*(self.INPUT_RANGES["tempo"]-1)], dtype=tf.dtypes.bool)
         ]
 
 
@@ -197,4 +199,5 @@ class Config:
 
     
     def get_max_beat_from_time_sign(self, time_sign):
-        return self.numerators[time_sign % self.tot_numerators] - 1 
+        idx = tf.math.floormod(time_sign, self.tot_numerators)
+        return tf.cast(tf.add(tf.gather(self.numerators, idx),-1), dtype=tf.dtypes.int64)

@@ -83,7 +83,7 @@ class Config:
         ### MODEL CONFIGURATIONS
 
         # DECODER
-        self.SEQ_LEN                        = 6144
+        self.SEQ_LEN                        = 1024
         self.TOKEN_DIM                      = 512
         self.ATTENTION_BLOCKS               = 2
         self.ATTENTION_HEADS                = 4
@@ -109,7 +109,7 @@ class Config:
             "key_sign": 24+1,
             "time_sign": 153,
             "tempo": 49
-        }
+        } # tot=1399
 
         self.embedding_layers = [
             tf.keras.layers.Embedding(self.INPUT_RANGES["type"],        self.SINGLE_EMB_SIZE),
@@ -126,14 +126,14 @@ class Config:
         ]
 
         # Custom configuration for using GPT2 as a standard transformer decoder
-        self.decoder_config = transformers.GPT2Config(
-            vocab_size=0, 
-            n_positions = self.SEQ_LEN, 
-            n_embd = self.TOKEN_DIM, 
-            n_layer = self.ATTENTION_BLOCKS, 
-            n_head = self.ATTENTION_HEADS, 
-            activation_function='relu'
-        )
+        # self.decoder_config = transformers.GPT2Config(
+        #     vocab_size=0, 
+        #     n_positions = self.SEQ_LEN, 
+        #     n_embd = self.TOKEN_DIM, 
+        #     n_layer = self.ATTENTION_BLOCKS, 
+        #     n_head = self.ATTENTION_HEADS, 
+        #     activation_function='relu'
+        # )
         
         self.output_dense_layers = [
             tf.keras.layers.Dense(self.INPUT_RANGES["type"]),
@@ -179,11 +179,11 @@ class Config:
 
 
 
-    def get_decoder(self):
-        '''
-        Instantiate decoder from its corresponding configuration
-        '''
-        return transformers.TFGPT2Model(self.decoder_config)
+    # def get_decoder(self):
+    #     '''
+    #     Instantiate decoder from its corresponding configuration
+    #     '''
+    #     return transformers.TFGPT2Model(self.decoder_config)
 
     
     def get_positional_embedding_matrix(self):

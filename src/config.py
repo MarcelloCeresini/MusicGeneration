@@ -152,34 +152,32 @@ class Config:
         ]
     
         self.full_mask = [
-            tf.constant([[True]*self.INPUT_RANGES["type"]], dtype=tf.dtypes.bool),
-            tf.constant([[True]*self.INPUT_RANGES["measure"]],dtype=tf.dtypes.bool),
-            tf.constant([[True]*self.INPUT_RANGES["beat"]],dtype=tf.dtypes.bool),
-            tf.constant([[True]*self.INPUT_RANGES["position"]],dtype=tf.dtypes.bool),
-            tf.constant([[True]*self.INPUT_RANGES["duration"]],dtype=tf.dtypes.bool),
-            tf.constant([[True]*self.INPUT_RANGES["pitch"]],dtype=tf.dtypes.bool),
-            tf.constant([[True]*self.INPUT_RANGES["instrument"]],dtype=tf.dtypes.bool),
-            tf.constant([[True]*self.INPUT_RANGES["velocity"]],dtype=tf.dtypes.bool),
-            tf.constant([[True]*self.INPUT_RANGES["key_sign"]],dtype=tf.dtypes.bool),
-            tf.constant([[True]*self.INPUT_RANGES["time_sign"]],dtype=tf.dtypes.bool),
-            tf.constant([[True]*self.INPUT_RANGES["tempo"]], dtype=tf.dtypes.bool)
+            # np.asarray([True]*self.INPUT_RANGES["type"], dtype=np.bool8),
+            np.asarray([True]*self.INPUT_RANGES["measure"],dtype=np.bool8),
+            np.asarray([True]*self.INPUT_RANGES["beat"],dtype=np.bool8),
+            np.asarray([True]*self.INPUT_RANGES["position"],dtype=np.bool8),
+            np.asarray([True]*self.INPUT_RANGES["duration"],dtype=np.bool8),
+            np.asarray([True]*self.INPUT_RANGES["pitch"],dtype=np.bool8),
+            np.asarray([True]*self.INPUT_RANGES["instrument"],dtype=np.bool8),
+            np.asarray([True]*self.INPUT_RANGES["velocity"],dtype=np.bool8),
+            np.asarray([True]*self.INPUT_RANGES["key_sign"],dtype=np.bool8),
+            np.asarray([True]*self.INPUT_RANGES["time_sign"],dtype=np.bool8),
+            np.asarray([True]*self.INPUT_RANGES["tempo"], dtype=np.bool8)
         ]
 
         self.default_mask = [
-            tf.constant([[True] + [False]*(self.INPUT_RANGES["type"]-1)], dtype=tf.dtypes.bool),
-            tf.constant([[True] + [False]*(self.INPUT_RANGES["measure"]-1)], dtype=tf.dtypes.bool),
-            tf.constant([[True] + [False]*(self.INPUT_RANGES["beat"]-1)], dtype=tf.dtypes.bool),
-            tf.constant([[True] + [False]*(self.INPUT_RANGES["position"]-1)], dtype=tf.dtypes.bool),
-            tf.constant([[True] + [False]*(self.INPUT_RANGES["duration"]-1)], dtype=tf.dtypes.bool),
-            tf.constant([[True] + [False]*(self.INPUT_RANGES["pitch"]-1)], dtype=tf.dtypes.bool),
-            tf.constant([[True] + [False]*(self.INPUT_RANGES["instrument"]-1)], dtype=tf.dtypes.bool),
-            tf.constant([[True] + [False]*(self.INPUT_RANGES["velocity"]-1)], dtype=tf.dtypes.bool),
-            tf.constant([[True] + [False]*(self.INPUT_RANGES["key_sign"]-1)], dtype=tf.dtypes.bool),
-            tf.constant([[True] + [False]*(self.INPUT_RANGES["time_sign"]-1)], dtype=tf.dtypes.bool),
-            tf.constant([[True] + [False]*(self.INPUT_RANGES["tempo"]-1)], dtype=tf.dtypes.bool)
+            # np.asarray([True] + [False]*(self.INPUT_RANGES["type"]-1), dtype=np.bool8),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["measure"]-1), dtype=np.bool8),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["beat"]-1), dtype=np.bool8),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["position"]-1), dtype=np.bool8),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["duration"]-1), dtype=np.bool8),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["pitch"]-1), dtype=np.bool8),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["instrument"]-1), dtype=np.bool8),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["velocity"]-1), dtype=np.bool8),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["key_sign"]-1), dtype=np.bool8),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["time_sign"]-1), dtype=np.bool8),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["tempo"]-1), dtype=np.bool8)
         ]
-
-
 
     # def get_decoder(self):
     #     '''
@@ -187,7 +185,6 @@ class Config:
     #     '''
     #     return transformers.TFGPT2Model(self.decoder_config)
 
-    
     def get_positional_embedding_matrix(self):
         # From "Attention is all you need", https://arxiv.org/pdf/1706.03762.pdf
         PE = np.zeros((self.SEQ_LEN, self.TOKEN_DIM))
@@ -197,7 +194,3 @@ class Config:
                 PE[pos,2*i+1] = math.cos(pos/(10000**(2*i/self.TOKEN_DIM)))
         return PE
 
-    
-    def get_max_beat_from_time_sign(self, time_sign):
-        idx = tf.math.floormod(time_sign, self.tot_numerators)
-        return tf.cast(tf.add(tf.gather(self.numerators, idx),-1), dtype=tf.dtypes.int64)

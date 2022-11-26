@@ -17,7 +17,7 @@ class Config:
         # Setup training streategy for Multi-GPU training
         if len(self.GPUS) > 1:
             self.training_strategy = tf.distribute.MirroredStrategy()
-            self.num_devices = self.training_strategy.num_replicas
+            self.num_devices = self.training_strategy.num_replicas_in_sync
         else:
             self.num_devices = 1
         
@@ -42,7 +42,7 @@ class Config:
             "lmd_matched": os.path.join(self.DATA_PATH, "lmd_matched/")
         }
         self.tf_data_path = os.path.join(self.DATA_PATH, "tf_data")
-        self.lmda_genres_tf_data_path = os.path.join(self.DATA_PATH, "lmda_genres_tf_data")
+        self.lmdm_tf_data_path = os.path.join(self.DATA_PATH, "lmdm_tf_data")
 
         # NOTATION DEFINITIONS
         # Tempo
@@ -77,12 +77,15 @@ class Config:
         self.tot_denominators = len(self.denominators)
         
         # Genres
+        # USE THIS FOR THE LARGE DATASET
         self.accepted_subgenres = [
             "rock","pop","dance","country","metal",
             "classical","folk","blues","house","indie", 
             "latin","jazz","funk","rap","punk","r&b", 
             "gospel","electronic"
         ]
+        # USE THIS FOR THE SMALL DATASET
+        # self.accepted_subgenres = ['folk', 'nes', 'maestro']
 
         # MODEL CONFIGURATIONS
         # Decoder
@@ -100,7 +103,8 @@ class Config:
             n_embd = self.TOKEN_DIM, 
             n_layer = self.ATTENTION_BLOCKS, 
             n_head = self.ATTENTION_HEADS, 
-            activation_function='relu'
+            activation_function='relu',
+            reorder_and_upcast_attn = True
         )
 
         # EMBEDDING LAYERS

@@ -3,10 +3,8 @@ import numpy as np
 import muspy
 import os, shutil, tarfile
 from tqdm import tqdm
-import transformers
 
 import config
-
 
 def get_dataset(key: str, conf: config.Config) -> muspy.Dataset:
 

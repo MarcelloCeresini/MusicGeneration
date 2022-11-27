@@ -111,7 +111,7 @@ class Config:
         self.SINGLE_EMB_SIZE = 64
 
         # DATASET CONFIGURATIONS
-        self.BATCH_SIZE         = 12
+        self.BATCH_SIZE         = 6
         self.GLOBAL_BATCH_SIZE  = self.BATCH_SIZE * self.num_devices
         self.SHUFFLE_SIZE       = 256
         self.PREFETCH_SIZE      = 32
@@ -135,34 +135,6 @@ class Config:
         } # tot=1399
 
         self.input_ranges_sum = sum(self.INPUT_RANGES.values())
-
-        self.embedding_layers = [
-            tf.keras.layers.Embedding(self.INPUT_RANGES["type"],        self.SINGLE_EMB_SIZE),
-            tf.keras.layers.Embedding(self.INPUT_RANGES["measure"],     self.SINGLE_EMB_SIZE),
-            tf.keras.layers.Embedding(self.INPUT_RANGES["beat"],        self.SINGLE_EMB_SIZE),
-            tf.keras.layers.Embedding(self.INPUT_RANGES["position"],    self.SINGLE_EMB_SIZE),
-            tf.keras.layers.Embedding(self.INPUT_RANGES["duration"],    self.SINGLE_EMB_SIZE),
-            tf.keras.layers.Embedding(self.INPUT_RANGES["pitch"],       self.SINGLE_EMB_SIZE),
-            tf.keras.layers.Embedding(self.INPUT_RANGES["instrument"],  self.SINGLE_EMB_SIZE),
-            tf.keras.layers.Embedding(self.INPUT_RANGES["velocity"],    self.SINGLE_EMB_SIZE),
-            tf.keras.layers.Embedding(self.INPUT_RANGES["key_sign"],    self.SINGLE_EMB_SIZE),
-            tf.keras.layers.Embedding(self.INPUT_RANGES["time_sign"],   self.SINGLE_EMB_SIZE),
-            tf.keras.layers.Embedding(self.INPUT_RANGES["tempo"],       self.SINGLE_EMB_SIZE)
-        ]
-        
-        self.output_dense_layers = [
-            tf.keras.layers.Dense(self.INPUT_RANGES["type"]),
-            tf.keras.layers.Dense(self.INPUT_RANGES["measure"]),
-            tf.keras.layers.Dense(self.INPUT_RANGES["beat"]),
-            tf.keras.layers.Dense(self.INPUT_RANGES["position"]),
-            tf.keras.layers.Dense(self.INPUT_RANGES["duration"]),
-            tf.keras.layers.Dense(self.INPUT_RANGES["pitch"]),
-            tf.keras.layers.Dense(self.INPUT_RANGES["instrument"]),
-            tf.keras.layers.Dense(self.INPUT_RANGES["velocity"]),
-            tf.keras.layers.Dense(self.INPUT_RANGES["key_sign"]),
-            tf.keras.layers.Dense(self.INPUT_RANGES["time_sign"]),
-            tf.keras.layers.Dense(self.INPUT_RANGES["tempo"])
-        ]
     
         self.full_mask = [
             # np.asarray([True]*self.INPUT_RANGES["type"], dtype=np.bool8),

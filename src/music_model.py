@@ -405,7 +405,12 @@ def create_model(input_shape=(conf.SEQ_LEN-1, len(conf.INPUT_RANGES)), num_genre
     genres = tf.keras.Input(shape=num_genres , name='genres', dtype=tf.float32)
     
     # Define loss
-    loss_function = [tf.keras.losses.SparseCategoricalCrossentropy(name="loss_"+key) for key in conf.INPUT_RANGES.keys()]
+    loss_functions_dict = {
+		key: tf.keras.losses.SparseCategoricalCrossentropy(name="loss_"+key, reduction=tf.keras.losses.Reduction.NONE) 
+				for key in conf.INPUT_RANGES.keys()
+	}
+
+    # loss_function = [tf.keras.losses.SparseCategoricalCrossentropy(name="loss_"+key) for key in conf.INPUT_RANGES.keys()]
     # loss_function = tf.keras.losses.SparseCategoricalCrossentropy(reduction=tf.keras.losses.Reduction.NONE)
     subsequent_type_transform_layer = SubsequentTypeTransformationLayer()
     reg_scaler = tf.constant(reg_loss_scale, dtype=tf.float32)
@@ -575,7 +580,7 @@ def create_model(input_shape=(conf.SEQ_LEN-1, len(conf.INPUT_RANGES)), num_genre
     # Compile and return
     model.compile(
         optimizer="adam", 
-        loss=loss_function,
+        loss=loss_functions_dict,
         # metrics=[
         #     tf.keras.metrics.Accuracy(),
         #     tf.keras.metrics.Precision(),

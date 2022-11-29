@@ -43,6 +43,7 @@ class Config:
         }
         self.tf_data_path = os.path.join(self.DATA_PATH, "tf_data")
         self.tf_data7_path = os.path.join(self.DATA_PATH, "tf_data7")
+        self.tf_data7dict_path = os.path.join(self.DATA_PATH, "tf_data7")
         self.lmdm_tf_data_path = os.path.join(self.DATA_PATH, "lmdm_tf_data")
 
         # NOTATION DEFINITIONS

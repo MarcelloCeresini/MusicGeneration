@@ -77,13 +77,14 @@ class Config:
         ]
 
         self.tf_data_path = os.path.join(self.DATA_PATH, "tf_data")
+        self.tf_data7_path = os.path.join(self.DATA_PATH, "tf_data7")
         self.lmda_genres_tf_data_path = os.path.join(self.DATA_PATH, "lmda_genres_tf_data")
 
 
         ### MODEL CONFIGURATIONS
 
         # DECODER
-        self.SEQ_LEN                        = 1024
+        self.SEQ_LEN                        = 6144
         self.TOKEN_DIM                      = 512
         self.ATTENTION_BLOCKS               = 2
         self.ATTENTION_HEADS                = 4

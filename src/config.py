@@ -42,6 +42,7 @@ class Config:
             "lmd_matched": os.path.join(self.DATA_PATH, "lmd_matched/")
         }
         self.tf_data_path = os.path.join(self.DATA_PATH, "tf_data")
+        self.tf_data7_path = os.path.join(self.DATA_PATH, "tf_data7")
         self.lmdm_tf_data_path = os.path.join(self.DATA_PATH, "lmdm_tf_data")
 
         # NOTATION DEFINITIONS
@@ -119,6 +120,7 @@ class Config:
         # TRAINING SETUP
         self.REG_LOSS_SCALE  = 0.001
         self.USE_MASKING     = True
+        self.DROPOUT_VALUE = 0.5
 
         self.INPUT_RANGES = {
             "type": 8,

@@ -389,6 +389,26 @@ class MaskingActivationLayer(tf.keras.layers.Layer):
         return masks
 
 
+class SparseCategoricalCrossentropy_Sequence(tf.keras.losses.Loss):
+
+    def __init__(self, reduction=tf.keras.losses.Reduction.NONE, name=None):
+        # REDUCTION is NONE because already done inside SparseCategoricalCrossentropy
+        super().__init__(reduction, name)
+
+    def call(self, y_true, y_pred):
+        '''
+        y_true will be a vector of shape                            BATCH_SIZE*(SEQ_LEN-1)
+        y_pred instead will be a vector of PROBABILITIES of shape   BATCH_SIZE*(SEQ_LEN-1)*INPUT_RANGE[part_of_token]
+        this loss applies SparseCategoricalCrossentropy for each token
+
+        We will have #events_elements of these losses, one for each part_of_token
+
+        '''
+        y_true_concat_batch = tf.reshape(y_true, [-1])
+        y_pred_concat_batch = tf.reshape(y_pred, [-1, y_pred.shape[2]])
+
+        return tf.keras.losses.SparseCategoricalCrossentropy(reduction="sum")(y_true_concat_batch, y_pred_concat_batch) * (1. / conf.GLOBAL_BATCH_SIZE)
+        
 
 def create_model(input_shape=(conf.SEQ_LEN-1, len(conf.INPUT_RANGES)), num_genres=len(conf.accepted_subgenres), 
                  use_regularization=True, use_masking_layers=True, reg_loss_scale=conf.REG_LOSS_SCALE):
@@ -406,12 +426,9 @@ def create_model(input_shape=(conf.SEQ_LEN-1, len(conf.INPUT_RANGES)), num_genre
     
     # Define loss
     loss_functions_dict = {
-		key: tf.keras.losses.SparseCategoricalCrossentropy(name="loss_"+key, reduction=tf.keras.losses.Reduction.NONE) 
-				for key in conf.INPUT_RANGES.keys()
+		key: SparseCategoricalCrossentropy_Sequence(name="loss_"+key) for key in conf.INPUT_RANGES.keys()
 	}
-
-    # loss_function = [tf.keras.losses.SparseCategoricalCrossentropy(name="loss_"+key) for key in conf.INPUT_RANGES.keys()]
-    # loss_function = tf.keras.losses.SparseCategoricalCrossentropy(reduction=tf.keras.losses.Reduction.NONE)
+    
     subsequent_type_transform_layer = SubsequentTypeTransformationLayer()
     reg_scaler = tf.constant(reg_loss_scale, dtype=tf.float32)
     
@@ -483,29 +500,30 @@ def create_model(input_shape=(conf.SEQ_LEN-1, len(conf.INPUT_RANGES)), num_genre
         tf.keras.layers.Dense(conf.INPUT_RANGES['tempo'],      name='tempo_scores')
     ]
     
+    # OSS: names of these layers must correspond to the keys of dict y_true (in case it's a dict)
     output_probs_layers = [
         # Type
-        tf.keras.layers.Softmax(name='type_probabilities'),
+        tf.keras.layers.Softmax(name='type'),
         # Measure
-        tf.keras.layers.Softmax(name='measure_probabilities'),
+        tf.keras.layers.Softmax(name='measure'),
         # Beat
-        tf.keras.layers.Softmax(name='beat_probabilities'),
+        tf.keras.layers.Softmax(name='beat'),
         # Position
-        tf.keras.layers.Softmax(name='position_probabilities'),
+        tf.keras.layers.Softmax(name='position'),
         # Duration
-        tf.keras.layers.Softmax(name='duration_probabilities'),
+        tf.keras.layers.Softmax(name='duration'),
         # Pitch
-        tf.keras.layers.Softmax(name='pitch_probabilities'),
+        tf.keras.layers.Softmax(name='pitch'),
         # Instrument
-        tf.keras.layers.Softmax(name='instrument_probabilities'),
+        tf.keras.layers.Softmax(name='instrument'),
         # Velocity
-        tf.keras.layers.Softmax(name='velocity_probabilities'),
+        tf.keras.layers.Softmax(name='velocity'),
         # Key sign
-        tf.keras.layers.Softmax(name='keysign_probabilities'),
+        tf.keras.layers.Softmax(name='key_sign'),
         # Time sign
-        tf.keras.layers.Softmax(name='timesign_probabilities'),
+        tf.keras.layers.Softmax(name='time_sign'),
         # Tempo
-        tf.keras.layers.Softmax(name='tempo_probabilities')
+        tf.keras.layers.Softmax(name='tempo')
     ]
     
     # Masking layers
@@ -541,17 +559,6 @@ def create_model(input_shape=(conf.SEQ_LEN-1, len(conf.INPUT_RANGES)), num_genre
 
     # Create model
     model = tf.keras.Model(inputs=[songs, genres], outputs=out_probabilities, name='music_generation_model')
-    
-    # Define loss
-    # def custom_loss(songs, y_pred):
-    #     gt_vectors = [songs[:,:,i] for i in range(len(conf.INPUT_RANGES))]
-    #     # Base loss term
-    #     losses = []
-    #     for i in range(len(y_pred)):
-    #         losses.append(tf.math.reduce_sum(
-    #             tf.cast(loss_function(gt_vectors[i], y_pred[i]), tf.float32) * \
-    #             (1. / conf.GLOBAL_BATCH_SIZE)))
-    #     return tf.math.reduce_sum(losses)
     
     # Define regularizers
     def custom_regularizers(songs, y_pred):

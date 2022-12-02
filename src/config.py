@@ -3,7 +3,7 @@ import transformers
 import tensorflow as tf
 import os
 import math
-import datetime
+from datetime import datetime
 
 class Config:
     

@@ -3,6 +3,7 @@ import transformers
 import tensorflow as tf
 import os
 import math
+import datetime
 
 class Config:
     
@@ -110,7 +111,7 @@ class Config:
         )
 
         # EMBEDDING LAYERS
-        self.SINGLE_EMB_SIZE = 64
+        self.SINGLE_EMB_SIZE    = 64
 
         # DATASET CONFIGURATIONS
         self.BATCH_SIZE         = 6
@@ -119,22 +120,58 @@ class Config:
         self.PREFETCH_SIZE      = 32
 
         # TRAINING SETUP
-        self.REG_LOSS_SCALE  = 0.001
-        self.USE_MASKING     = True
-        self.DROPOUT_VALUE = 0.5
+        self.REG_LOSS_SCALE     = 0.001
+        self.USE_MASKING        = True
+        self.DROPOUT_VALUE      = 0.5
+
+        self.CHECKPOINT_PATH = os.path.join(root_path, "training", "checkpoints", "model-{epoch:02d}")
+        self.TRAINING_LOGS_PATH = os.path.join(root_path, "training", "logs", datetime.now().strftime("%Y%m%d-%H%M%S"))
+
+        ### To add custom scalars to the TensorBoard logs
+        # file_writer = tf.summary.create_file_writer(self.TRAINING_LOGS_PATH + "/metrics")
+        # file_writer.set_as_default()
+
+        self.MODEL_CALLBACKS = [
+            # at the end of training use model.load_weights(self.CHECKPOINT_PATH) to retrieve best weights
+            tf.keras.callbacks.ModelCheckpoint( 
+                filepath=self.CHECKPOINT_PATH,
+                save_weights_only=False,
+                monitor="val_accuracy",
+                mode="max",
+                save_best_only=True
+            ),
+            tf.keras.callbacks.ReduceLROnPlateau(
+                monitor="val_loss",
+                factor=0.1,
+                patience=10
+            ),
+            tf.keras.callbacks.EarlyStopping(
+                monitor='val_loss',
+                patience=20,
+                restore_best_weights=True,
+                start_from_epoch=0 # ADD warmup_epochs if warmup is needed
+            ),
+            tf.keras.callbacks.TensorBoard(
+                log_dir=self.TRAINING_LOGS_PATH,
+                histogram_freq=1,
+                write_graph=False,
+                write_steps_per_second=True,
+                embeddings_freq=5
+            )
+        ]
 
         self.INPUT_RANGES = {
             "type": 8,
-            "measure" : 256,
-            "beat": 131,
-            "position": 128,
-            "duration": 136,
-            "pitch": 256,
-            "instrument": 129,
-            "velocity": 128,
-            "key_sign": 24+1,
-            "time_sign": 153,
-            "tempo": 49
+            "measure" : 256,    # 256
+            "beat": 131,        # 387
+            "position": 128,    # 515
+            "duration": 136,    # 651
+            "pitch": 256,       # 907
+            "instrument": 129,  # 1036
+            "velocity": 128,    # 1164
+            "key_sign": 24+1,   # 1189
+            "time_sign": 153,   # 1342
+            "tempo": 49         # 1391
         } # tot=1399
 
         self.input_ranges_sum = sum(self.INPUT_RANGES.values())
@@ -166,6 +203,7 @@ class Config:
             np.asarray([True] + [False]*(self.INPUT_RANGES["time_sign"]-1), dtype=np.bool8),
             np.asarray([True] + [False]*(self.INPUT_RANGES["tempo"]-1), dtype=np.bool8)
         ]
+
 
     def get_decoder(self):
         '''

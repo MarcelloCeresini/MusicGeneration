@@ -90,8 +90,12 @@ class Config:
         # USE THIS FOR THE SMALL DATASET
         # self.accepted_subgenres = ['folk', 'nes', 'maestro']
 
-        # MODEL CONFIGURATIONS
-        # Decoder
+        self.tf_data_path = os.path.join(self.DATA_PATH, "tf_data")
+        self.tf_data7_path = os.path.join(self.DATA_PATH, "tf_data7")
+        self.lmda_genres_tf_data_path = os.path.join(self.DATA_PATH, "lmda_genres_tf_data")
+
+        ### MODEL CONFIGURATIONS
+        # DECODER
         self.SEQ_LEN                        = 6144
         self.TOKEN_DIM                      = 512
         self.GENRE_DIM                      = 512

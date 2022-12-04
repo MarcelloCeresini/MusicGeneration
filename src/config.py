@@ -3,11 +3,11 @@ import transformers
 import tensorflow as tf
 import os
 import math
-import datetime
+from datetime import datetime
 
 class Config:
     
-    def __init__(self, config_string, root_path):
+    def __init__(self, config_string, root_path, model_name='music_generation_tests'):
 
         # SYSTEM INFO
         self.N_CPUS  = os.cpu_count()
@@ -46,6 +46,7 @@ class Config:
         self.tf_data7_path = os.path.join(self.DATA_PATH, "tf_data7")
         self.tf_data7dict_path = os.path.join(self.DATA_PATH, "tf_data7dict")
         self.lmdm_tf_data_path = os.path.join(self.DATA_PATH, "lmdm_tf_data")
+        self.lmda_genres_tf_data_path = os.path.join(self.DATA_PATH, "lmda_genres_tf_data")
 
         # NOTATION DEFINITIONS
         # Tempo
@@ -90,10 +91,6 @@ class Config:
         # USE THIS FOR THE SMALL DATASET
         # self.accepted_subgenres = ['folk', 'nes', 'maestro']
 
-        self.tf_data_path = os.path.join(self.DATA_PATH, "tf_data")
-        self.tf_data7_path = os.path.join(self.DATA_PATH, "tf_data7")
-        self.lmda_genres_tf_data_path = os.path.join(self.DATA_PATH, "lmda_genres_tf_data")
-
         ### MODEL CONFIGURATIONS
         # DECODER
         self.SEQ_LEN                        = 6144
@@ -128,8 +125,8 @@ class Config:
         self.USE_MASKING        = True
         self.DROPOUT_VALUE      = 0.5
 
-        self.CHECKPOINT_PATH = os.path.join(root_path, "training", "checkpoints", "model-{epoch:02d}")
-        self.TRAINING_LOGS_PATH = os.path.join(root_path, "training", "logs", datetime.now().strftime("%Y%m%d-%H%M%S"))
+        self.CHECKPOINTS_DIR   = os.path.join(root_path, "training", "checkpoints", model_name)
+        self.TRAINING_LOGS_DIR = os.path.join(root_path, "training", "logs", model_name)
 
         ### To add custom scalars to the TensorBoard logs
         # file_writer = tf.summary.create_file_writer(self.TRAINING_LOGS_PATH + "/metrics")
@@ -138,30 +135,28 @@ class Config:
         self.MODEL_CALLBACKS = [
             # at the end of training use model.load_weights(self.CHECKPOINT_PATH) to retrieve best weights
             tf.keras.callbacks.ModelCheckpoint( 
-                filepath=self.CHECKPOINT_PATH,
-                save_weights_only=False,
-                monitor="val_accuracy",
-                mode="max",
+                filepath=os.path.join(self.CHECKPOINTS_DIR, model_name),
+                save_weights_only=True,
+                monitor="val_loss",
                 save_best_only=True
             ),
             tf.keras.callbacks.ReduceLROnPlateau(
                 monitor="val_loss",
                 factor=0.1,
-                patience=10
+                patience=8
             ),
             tf.keras.callbacks.EarlyStopping(
                 monitor='val_loss',
-                patience=20,
+                patience=10,
                 restore_best_weights=True,
-                start_from_epoch=0 # ADD warmup_epochs if warmup is needed
-            ),
-            tf.keras.callbacks.TensorBoard(
-                log_dir=self.TRAINING_LOGS_PATH,
-                histogram_freq=1,
-                write_graph=False,
-                write_steps_per_second=True,
-                embeddings_freq=5
-            )
+            ),           
+            # tf.keras.callbacks.TensorBoard(
+            #     log_dir=os.path.join(self.TRAINING_LOGS_DIR, model_name),
+            #     histogram_freq=1,
+            #     write_graph=False,
+            #     write_steps_per_second=True,
+            #     embeddings_freq=5
+            # )
         ]
 
         self.INPUT_RANGES = {

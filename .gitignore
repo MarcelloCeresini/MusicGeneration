@@ -8,7 +8,9 @@ env.bak/
 venv.bak/
 
 # Folders
+training
 data
+src/wandb
 
 # pycache
 *__pycache__*

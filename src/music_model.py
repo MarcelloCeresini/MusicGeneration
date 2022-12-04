@@ -11,7 +11,6 @@ from config import Config
 ROOT_PATH = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
 conf = Config("single_instruments_type", ROOT_PATH)
 
-
 ### CUSTOM LAYERS
 # Custom intermediate layer for allowing types transformation (no parameters to be learnt)
 class SubsequentTypeTransformationLayer(tf.keras.layers.Layer):
@@ -41,10 +40,8 @@ class MaskTypeProbabilitiesLayer(tf.keras.layers.Layer):
         Since the decoder creates an output for token i in output i-1 (i.e. the last output is not correlated with any token)
         Creates the mask for the NEXT token (depending on token i it masks output i, that corresponds to scores for token i+1)
         '''
-
         batch_gt_types = inputs
-        TensorArrayMask = tf.TensorArray(tf.bool, size=conf.SEQ_LEN-1)
-
+        mask = tf.TensorArray(tf.bool, size=conf.SEQ_LEN-1)
         for i in tf.range(conf.SEQ_LEN-1):
             token_type = batch_gt_types[i]
             if token_type == 0: # only start of song token: cannot be anything else than instrument choice (1)
@@ -60,7 +57,6 @@ class MaskTypeProbabilitiesLayer(tf.keras.layers.Layer):
                 # - if a 5 is missing, we only allow 5                        --> [5]
                 # - if a 6 is missing, we only allow 6                        --> [6]
                 # i+1 is needed because if current token_type is 5 it counts (otherwise it would always put 2 consecutive 5)
-
                 if tf.size(tf.where(batch_gt_types[:i+1] == 5)) == 0:
                     type_mask = tf.constant([False, False, False, False, False, True, False, False], dtype=tf.bool)
                 elif tf.size(tf.where(batch_gt_types[:i+1] == 6)) == 0:
@@ -72,17 +68,14 @@ class MaskTypeProbabilitiesLayer(tf.keras.layers.Layer):
             else:
                 # ERROR. Define a random type mask so that it's defined in all branches for tf.function
                 type_mask = tf.constant([False, False, False, False, False, False, False, False], dtype=tf.bool)
-
-            TensorArrayMask = TensorArrayMask.write(i, type_mask)
-
-        return TensorArrayMask.stack()
+            mask = mask.write(i, type_mask)
+        return mask.stack()
 
 
     def call(self, inputs, training=True):
         '''
         Takes as input the ground truth song (at training time) or the logits (at testing time) 
         and computes a mask for the type probabilities.
-
         output masks is BATCH_SIZE * SEQ_LEN * 1 --> we mask also the last output even if it's useless
         '''
         if training:
@@ -102,7 +95,7 @@ class MaskTypeProbabilitiesLayer(tf.keras.layers.Layer):
             # TODO: implement this branch
             pass
 
-
+# The main masking layer applying all constraints based on the predicted types 
 class MaskingActivationLayer(tf.keras.layers.Layer):
     def __init__(self, trainable=False, name=None, dtype=None, dynamic=False, **kwargs):
         super().__init__(trainable, name, dtype, dynamic, **kwargs)
@@ -142,7 +135,7 @@ class MaskingActivationLayer(tf.keras.layers.Layer):
         # Indexes
         index_tensor = tf.range(conf.SEQ_LEN-1, dtype=tf.int32)
         # Define mask (output) using a TensorArray
-        TensorArrayMask = tf.TensorArray(dtype=tf.bool, size=conf.SEQ_LEN-1)
+        mask = tf.TensorArray(dtype=tf.bool, size=conf.SEQ_LEN-1)
         # Iterate over the indexes
         for idx in index_tensor:
             until_idx = idx+1
@@ -168,7 +161,6 @@ class MaskingActivationLayer(tf.keras.layers.Layer):
             scores      = seq_scores[idx]
             song = song_tokens # TODO: don't need to mask?
             ### song        = song_tokens * (tf.expand_dims([1]*idx + [0]*(conf.SEQ_LEN-1-idx), axis=-1)) # Mask all tokens after index idx
-            
             ## MAIN BODY ##
             if chosen_type == 0 or chosen_type == 2 or chosen_type == 7:
                 default_token_parts = [True, True, True, True, True, True, True, True, True, True]
@@ -188,7 +180,6 @@ class MaskingActivationLayer(tf.keras.layers.Layer):
                 min_measure = song[idx, 1]   # It has to be >= than the last measure
                 # If in the MEASURE SCORES the MAX SCORE between all possible measures == min_measure, the measure is min_measure.
                 # In this case, we need to make sure that beat >= last_beat
-
                 if tf.math.argmax(
                     scores[:conf.INPUT_RANGES["measure"]], 
                         output_type=tf.int32) == min_measure:  
@@ -261,7 +252,7 @@ class MaskingActivationLayer(tf.keras.layers.Layer):
             if default_flag:                
                 # No manual masking required, either "can freely choose this part of the token" (True) or 
                 # "can only choose default for this part of the token" (False)
-                TensorArrayMask = TensorArrayMask.write(idx, tf.concat(
+                mask = mask.write(idx, tf.concat(
                     # Default mask only allows to predict a 0
                     # Full mask allows to predict any value
                     [self.default_mask[i] if default_token_parts[i] else self.full_mask[i] 
@@ -279,7 +270,7 @@ class MaskingActivationLayer(tf.keras.layers.Layer):
                     dtype=tf.dtypes.bool)
                 
                 # Only mask the forbidden instruments, all the rest is default
-                TensorArrayMask = TensorArrayMask.write(idx, tf.concat(
+                mask = mask.write(idx, tf.concat(
                     [self.default_mask[i] for i in range(5)] + \
                     [instruments_mask] + \
                     [self.default_mask[i] for i in range(6,len(default_token_parts))], 
@@ -293,9 +284,8 @@ class MaskingActivationLayer(tf.keras.layers.Layer):
                             tf.repeat([False], min_measure),        # Can be equal to or greater than min_measure
                             tf.repeat([True],  conf.INPUT_RANGES["measure"]-min_measure)
                         ], axis=-1
-                    ), dtype=tf.dtypes.bool
+                    ), dtype=tf.bool
                 )
-                
                 # We need to do manual masking. Define all tensors (default_masks will most probably be changed, full_masks won't)
                 beat_mask        = self.default_mask[1]
                 position_mask    = self.default_mask[2]
@@ -352,7 +342,7 @@ class MaskingActivationLayer(tf.keras.layers.Layer):
                             tf.repeat([True],  max_beat-min_beat), 
                             tf.repeat([False], conf.INPUT_RANGES["beat"]-max_beat)],
                             axis=-1), 
-                        dtype=tf.dtypes.bool)
+                        dtype=tf.bool)
                         
                     if min_position != -1: # it is ALWAYS != -1 if chosen_type == 3
                             
@@ -387,12 +377,12 @@ class MaskingActivationLayer(tf.keras.layers.Layer):
                             for i in range(conf.INPUT_RANGES["tempo"])], 
                             dtype=tf.bool)
                 
-                TensorArrayMask = TensorArrayMask.write(idx, tf.concat([
+                mask = mask.write(idx, tf.concat([
                     measure_mask, beat_mask, position_mask, duration_mask,
                     pitch_mask, instruments_mask, velocity_mask, key_sign_mask,
                     time_sign_mask, tempo_mask], axis=-1))
 
-        return TensorArrayMask.stack()
+        return mask.stack()
 
     def call(self, inputs, training=True):
         '''
@@ -406,11 +396,11 @@ class MaskingActivationLayer(tf.keras.layers.Layer):
         songs, out_logits, types_probabilities = inputs
         chosen_types  = tf.expand_dims(tf.math.argmax(types_probabilities, axis=2), axis=-1) # TODO: check if SEQ_LEN -1 or -2
         concat_logits = tf.concat(out_logits[1:], axis=-1)                 # Concatenate all logits (except type) into a tensor batch_size x seq_len x 1391
-        
         masks = tf.map_fn(fn=self.get_mask_for_all_tokens, elems=(         # Iterate function over batch dimension 
                 tf.cast(chosen_types, concat_logits.dtype),                # BATCH*(SEQ_LEN-1)*1
                 tf.cast(songs,   concat_logits.dtype),                     # BATCH*(SEQ_LEN-1)*11
-                concat_logits                                              # BATCH*(SEQ_LEN-1)*1391  # TODO: check if SLICE is needed or we could directly pass the full concat_logits
+                concat_logits                                              # BATCH*(SEQ_LEN-1)*1391 
+                # TODO: check if SLICE is needed or we could directly pass the full concat_logits
             ), fn_output_signature=tf.TensorSpec(                          # Total: a BATCH * SEQ_LEN-1 * 1403 tensor
                 (conf.SEQ_LEN-1, conf.input_ranges_sum - conf.INPUT_RANGES['type']),
                 dtype=tf.bool
@@ -434,33 +424,46 @@ def create_model(input_shape=(conf.SEQ_LEN-1, len(conf.INPUT_RANGES)), num_genre
     songs  = tf.keras.Input(shape=input_shape, name='songs',  dtype=tf.int32)
     genres = tf.keras.Input(shape=num_genres , name='genres', dtype=tf.float32)
     
+    # Loss utilities
     subsequent_type_transform_layer = SubsequentTypeTransformationLayer()
     reg_scaler = tf.constant(reg_loss_scale, dtype=tf.float32)
+    loss_function = tf.keras.losses.SparseCategoricalCrossentropy(reduction="sum")
     
     # Embedding layers
     embedding_layers = [
         # Type embedding
-        tf.keras.layers.Embedding(conf.INPUT_RANGES['type'],       conf.SINGLE_EMB_SIZE, input_length=seq_len_no_genre, name='type_embeddings'),
+        tf.keras.layers.Embedding(conf.INPUT_RANGES['type'],       conf.SINGLE_EMB_SIZE, 
+                                  input_length=seq_len_no_genre, name='type_embeddings'),
         # Measure embedding
-        tf.keras.layers.Embedding(conf.INPUT_RANGES['measure'],    conf.SINGLE_EMB_SIZE, input_length=seq_len_no_genre, name='measure_embeddings'),
+        tf.keras.layers.Embedding(conf.INPUT_RANGES['measure'],    conf.SINGLE_EMB_SIZE, 
+                                  input_length=seq_len_no_genre, name='measure_embeddings'),
         # Beat embedding
-        tf.keras.layers.Embedding(conf.INPUT_RANGES['beat'],       conf.SINGLE_EMB_SIZE, input_length=seq_len_no_genre, name='beat_embeddings'),
+        tf.keras.layers.Embedding(conf.INPUT_RANGES['beat'],       conf.SINGLE_EMB_SIZE, 
+                                  input_length=seq_len_no_genre, name='beat_embeddings'),
         # Position embedding
-        tf.keras.layers.Embedding(conf.INPUT_RANGES['position'],   conf.SINGLE_EMB_SIZE, input_length=seq_len_no_genre, name='position_embeddings'),
+        tf.keras.layers.Embedding(conf.INPUT_RANGES['position'],   conf.SINGLE_EMB_SIZE, 
+                                  input_length=seq_len_no_genre, name='position_embeddings'),
         # Duration embedding
-        tf.keras.layers.Embedding(conf.INPUT_RANGES['duration'],   conf.SINGLE_EMB_SIZE, input_length=seq_len_no_genre, name='duration_embeddings'),
+        tf.keras.layers.Embedding(conf.INPUT_RANGES['duration'],   conf.SINGLE_EMB_SIZE, 
+                                  input_length=seq_len_no_genre, name='duration_embeddings'),
         # Pitch embedding
-        tf.keras.layers.Embedding(conf.INPUT_RANGES['pitch'],      conf.SINGLE_EMB_SIZE, input_length=seq_len_no_genre, name='pitch_embeddings'),
+        tf.keras.layers.Embedding(conf.INPUT_RANGES['pitch'],      conf.SINGLE_EMB_SIZE, 
+                                  input_length=seq_len_no_genre, name='pitch_embeddings'),
         # Instrument embedding
-        tf.keras.layers.Embedding(conf.INPUT_RANGES['instrument'], conf.SINGLE_EMB_SIZE, input_length=seq_len_no_genre, name='instrument_embeddings'),
+        tf.keras.layers.Embedding(conf.INPUT_RANGES['instrument'], conf.SINGLE_EMB_SIZE, 
+                                  input_length=seq_len_no_genre, name='instrument_embeddings'),
         # Velocity embedding
-        tf.keras.layers.Embedding(conf.INPUT_RANGES['velocity'],   conf.SINGLE_EMB_SIZE, input_length=seq_len_no_genre, name='velocity_embeddings'),
+        tf.keras.layers.Embedding(conf.INPUT_RANGES['velocity'],   conf.SINGLE_EMB_SIZE, 
+                                  input_length=seq_len_no_genre, name='velocity_embeddings'),
         # Key sign embedding
-        tf.keras.layers.Embedding(conf.INPUT_RANGES['key_sign'],   conf.SINGLE_EMB_SIZE, input_length=seq_len_no_genre, name='key_sign_embeddings'),
+        tf.keras.layers.Embedding(conf.INPUT_RANGES['key_sign'],   conf.SINGLE_EMB_SIZE, 
+                                  input_length=seq_len_no_genre, name='key_sign_embeddings'),
         # Time sign embedding
-        tf.keras.layers.Embedding(conf.INPUT_RANGES['time_sign'],  conf.SINGLE_EMB_SIZE, input_length=seq_len_no_genre, name='time_sign_embeddings'),
+        tf.keras.layers.Embedding(conf.INPUT_RANGES['time_sign'],  conf.SINGLE_EMB_SIZE, 
+                                  input_length=seq_len_no_genre, name='time_sign_embeddings'),
         # Tempo embedding
-        tf.keras.layers.Embedding(conf.INPUT_RANGES['tempo'],      conf.SINGLE_EMB_SIZE, input_length=seq_len_no_genre, name='tempo_embeddings')
+        tf.keras.layers.Embedding(conf.INPUT_RANGES['tempo'],      conf.SINGLE_EMB_SIZE, 
+                                  input_length=seq_len_no_genre, name='tempo_embeddings')
     ]
     
     genre_embedding_layer = tf.keras.Sequential([
@@ -544,47 +547,44 @@ def create_model(input_shape=(conf.SEQ_LEN-1, len(conf.INPUT_RANGES)), num_genre
     input_embedding   = sequence_concat_layer([genre_embedding[:, np.newaxis, :], input_embedding])
     input_embedding   = sum_layer([input_embedding, positional_encoding])
     model_output      = decoder({'inputs_embeds': input_embedding})['last_hidden_state']
-    out_scores        = [output_dense_layers[i](model_output)[:,:-1,:] for i in range(len(output_dense_layers))] # [BATCH_SIZE * SEQ_LEN-1 * events_elements] * INPUT_RANGES (various)
+    out_scores        = [output_dense_layers[i](model_output)[:,:-1,:] 
+                         for i in range(len(output_dense_layers))] # [BATCH_SIZE * SEQ_LEN-1 * events_elements] * INPUT_RANGES (various)
 
     # We don't care about the last scores, since they refer to a token that's out of bounds.
     if use_masking_layers:
-        type_mask           = type_masking_layer(songs, training=True)[:,:-1,:] 
+        type_mask           = type_masking_layer(songs, training=True)
         types_probabilities = output_probs_layers[0](out_scores[0], type_mask) # BATCH_SIZE * SEQ_LEN-1 * 8
         full_mask           = activations_masking([songs, out_scores, types_probabilities])
-        
         # Unpack the final masks into a list of masks
-        index = 0
-        masks = []          
-        
+        index = 0; masks = []          
         for key in conf.INPUT_RANGES:
             if key != 'type':
                 masks.append(full_mask[:, :, index:index+conf.INPUT_RANGES[key]])
                 index += conf.INPUT_RANGES[key]
-        
+        # Call all the softmax layers
         out_probabilities = [types_probabilities] + [
-            output_probs_layers[i](out_scores[i], masks[i-1]) for i in range(1, len(output_dense_layers))
-        ]
+            output_probs_layers[i](out_scores[i], masks[i-1]) 
+            for i in range(1, len(output_dense_layers))]
     else:
-        out_probabilities = [output_probs_layers[i](out_scores[i]) for i in range(len(output_dense_layers))]
+        out_probabilities = [output_probs_layers[i](out_scores[i]) 
+        for i in range(len(output_dense_layers))]
     
     out_probabilities_dict = {
-        key: out_probabilities[i] for i, key in enumerate(conf.INPUT_RANGES.keys())
+        key: out_probabilities[i] 
+        for i, key in enumerate(conf.INPUT_RANGES.keys())
     }
     
     # Create model
     model = tf.keras.Model(
         inputs=[songs, genres], 
-        outputs=full_mask, 
+        outputs=out_probabilities_dict, 
         name='music_generation_model'
     )
     
     # Define regularizers
     def custom_regularizers(songs, y_pred):
-        gt_vectors = [songs[:,:,i] for i in range(len(conf.INPUT_RANGES))]
         # Regularization loss: transform the actual vectors into consecutive-type representation
-        types = gt_vectors[0]
         max_pred_types = tf.argmax(y_pred[0], axis=2, output_type=tf.int32)
-        consecutive_gt_types   = subsequent_type_transform_layer(types)
         consecutive_pred_types = subsequent_type_transform_layer(max_pred_types)
         # Compute difference
         differences = consecutive_pred_types[:, 1:] - consecutive_pred_types[:, :-1]
@@ -597,28 +597,24 @@ def create_model(input_shape=(conf.SEQ_LEN-1, len(conf.INPUT_RANGES)), num_genre
     
     # Loss function for each separate part of the tokens
     def custom_loss(y_true, y_pred):
-        y_true_concat_batch = tf.cast(tf.reshape(y_true, [-1]), tf.dtypes.float32)
+        y_true_concat_batch = tf.cast(tf.reshape(y_true, [-1]), tf.float32)
         y_pred_concat_batch = tf.reshape(y_pred, [-1, y_pred.shape[2]])
-        
-        loss = tf.keras.losses.SparseCategoricalCrossentropy(reduction="sum")(y_true_concat_batch, y_pred_concat_batch) * (1. / (conf.GLOBAL_BATCH_SIZE * (conf.SEQ_LEN-1)))
+        loss = loss_function(y_true_concat_batch, y_pred_concat_batch) * \
+                (1. / (conf.GLOBAL_BATCH_SIZE * (conf.SEQ_LEN-1)))
         return loss
     
     # Cannot do it with standard framework, so we add a different loss for each part of the tokens
     for i in range(len(conf.INPUT_RANGES.keys())):
-        model.add_loss(
-            custom_loss(
-                y_true = songs[:,:,i],
-                y_pred = out_probabilities[i]
-            )
-        )
+        loss_name = list(conf.INPUT_RANGES.keys())[i] + '_loss'
+        loss = custom_loss(y_true = songs[:,:,i], y_pred = out_probabilities[i])
+        model.add_loss(loss)
+        model.add_metric(loss, name=loss_name)
     
     if use_regularization:
-        model.add_loss(custom_regularizers(songs, out_scores))
+        reg_loss = custom_regularizers(songs, out_scores)
+        model.add_loss(reg_loss)
+        model.add_metric(reg_loss, name='regularization_loss')
     
-
     # Compile and return
-    model.compile(
-        optimizer="adam"
-    )
-
+    model.compile(optimizer="adam")
     return model

@@ -394,13 +394,12 @@ class MaskingActivationLayer(tf.keras.layers.Layer):
         passes through map_fn --> get_mask_fro_all_tokens to debatch
         '''
         songs, out_logits, types_probabilities = inputs
-        chosen_types  = tf.expand_dims(tf.math.argmax(types_probabilities, axis=2), axis=-1) # TODO: check if SEQ_LEN -1 or -2
+        chosen_types  = tf.expand_dims(tf.math.argmax(types_probabilities, axis=2), axis=-1)
         concat_logits = tf.concat(out_logits[1:], axis=-1)                 # Concatenate all logits (except type) into a tensor batch_size x seq_len x 1391
         masks = tf.map_fn(fn=self.get_mask_for_all_tokens, elems=(         # Iterate function over batch dimension 
                 tf.cast(chosen_types, concat_logits.dtype),                # BATCH*(SEQ_LEN-1)*1
                 tf.cast(songs,   concat_logits.dtype),                     # BATCH*(SEQ_LEN-1)*11
                 concat_logits                                              # BATCH*(SEQ_LEN-1)*1391 
-                # TODO: check if SLICE is needed or we could directly pass the full concat_logits
             ), fn_output_signature=tf.TensorSpec(                          # Total: a BATCH * SEQ_LEN-1 * 1403 tensor
                 (conf.SEQ_LEN-1, conf.input_ranges_sum - conf.INPUT_RANGES['type']),
                 dtype=tf.bool

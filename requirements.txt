@@ -72,6 +72,7 @@ tqdm==4.64.1
 transformers
 traitlets==5.5.0
 urllib3==1.26.12
+wandb
 wcwidth==0.2.5
 webcolors==1.12
 wincertstore==0.2

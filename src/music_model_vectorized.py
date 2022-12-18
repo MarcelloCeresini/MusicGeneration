@@ -168,7 +168,6 @@ class MaskingActivationLayer(tf.keras.layers.Layer):
         self._tot_numerators = tf.constant(conf.tot_numerators)
 
 
-    @tf.function
     def get_max_beat_from_time_sign(self, time_sign):
         '''
         Since the time sign is defined (in utils.time_sign_map()) as: 
@@ -182,7 +181,6 @@ class MaskingActivationLayer(tf.keras.layers.Layer):
         return self._numerators[idx]
 
 
-    @tf.function
     def mask_tokens_if_type_is_desired_type(self, song, tmp_token_mask, desired_type):
 
         # useful if chosen_type == 1 and if chosen_type==3
@@ -196,7 +194,6 @@ class MaskingActivationLayer(tf.keras.layers.Layer):
         return token_is_desired_type
 
 
-    @tf.function
     def get_mask_of_present_values_from_desired_type(self, 
             song, tmp_token_mask, 
             desired_type, desired_type_string, desired_position_in_token, 
@@ -236,7 +233,8 @@ class MaskingActivationLayer(tf.keras.layers.Layer):
             indexes_masked = tf.expand_dims(tf.cast(tf.where(
                 condition=token_is_desired_type,
                 x=song[:,desired_position_in_token],        # a vector of feature indexes
-                y=conf.INPUT_RANGES[desired_type_string]    # a scalar = last feature index + 1
+                # y=conf.INPUT_RANGES[desired_type_string]    # a scalar = last feature index + 1
+                y=-1    # a scalar = -1
             ), dtype="int32"), axis=-1) # need to be int32/64 to be inside indices of scatter_nd 
 
             if not reverse_mask:
@@ -244,7 +242,7 @@ class MaskingActivationLayer(tf.keras.layers.Layer):
                 type_mask_tmp = tf.zeros(conf.INPUT_RANGES[desired_type_string])
 
                 # for each index in the indexes_masked tensor above, put 1 in the mask
-                # many of the values of the above tensor will be = conf.INPUT_RANGES[desired_type_string], the fake index
+                # many of the values of the above tensor will be the fake index
                 # It the end, we should have 1 for instruments that are defined (and can be chosen), 
                 # and 0 for the ones that are not defined (and cannot be chosen)
                 type_mask_tmp = tf.tensor_scatter_nd_max(
@@ -346,6 +344,7 @@ class MaskingActivationLayer(tf.keras.layers.Layer):
             # tf.print("chosen_type 027")
             default_token_parts = [True, True, True, True, True, True, True, True, True, True]
             default_flag = True
+
         elif chosen_type == 1: # Instrument selection, false only for type and instrument type (the ones that you can choose)
             # tf.print("chosen_type 1")
             token_is_instrument = self.mask_tokens_if_type_is_desired_type(song, tmp_token_mask, 1)
@@ -513,8 +512,10 @@ class MaskingActivationLayer(tf.keras.layers.Layer):
         if default_flag:
             # No manual masking required, either "can freely choose this part of the token" (True) or 
             # "can only choose default for this part of the token" (False)
+            
             tmp_return = tf.concat([self.default_mask[i] if default_token_parts[i] else self.full_mask[i] 
                 for i in range(len(default_token_parts))], axis=-1, name="concat_default")
+            
             # tf.print([x.shape for x in tmp_return])
             # tf.print("027-1init", tmp_return.shape)
 
@@ -525,6 +526,7 @@ class MaskingActivationLayer(tf.keras.layers.Layer):
         elif forbidden_instruments_flag:
             # Default flag is False and forbidden instruments flag (which means that the chosen type is 1)
             # Only mask the forbidden instruments, all the rest is default
+            
             tmp_return = tf.concat(
                 [self.default_mask[i] for i in range(5)] + \
                 [instruments_mask] + \
@@ -606,50 +608,46 @@ class MaskingActivationLayer(tf.keras.layers.Layer):
                 )
                 tf.ensure_shape(position_mask, conf.INPUT_RANGES["position"])
             
-            """ 
-            tf.ensure_shape(measure_mask, conf.INPUT_RANGES["measure"])
-            tf.ensure_shape(beat_mask, conf.INPUT_RANGES["beat"])
-            tf.ensure_shape(position_mask, conf.INPUT_RANGES["position"])
-            tf.ensure_shape(duration_mask, conf.INPUT_RANGES["duration"])
-            tf.ensure_shape(pitch_mask, conf.INPUT_RANGES["pitch"])
-            tf.ensure_shape(instruments_mask, conf.INPUT_RANGES["instrument"])
-            tf.ensure_shape(velocity_mask, conf.INPUT_RANGES["velocity"])
-            tf.ensure_shape(key_sign_mask, conf.INPUT_RANGES["key_sign"])
-            tf.ensure_shape(time_sign_mask, conf.INPUT_RANGES["time_sign"])
-            tf.ensure_shape(tempo_mask, conf.INPUT_RANGES["tempo"]) 
-            """
-
-            """ 
-            tf.print(measure_mask.shape)
-            tf.print(beat_mask.shape)
-            tf.print(position_mask.shape)
-            tf.print(duration_mask.shape)
-            tf.print(pitch_mask.shape)
-            tf.print(instruments_mask.shape)
-            tf.print(velocity_mask.shape)
-            tf.print(key_sign_mask.shape)
-            tf.print(time_sign_mask.shape)
-            tf.print(tempo_mask.shape)
-
-            tf.print("actual vectors")
-            tf.print(measure_mask)
-            tf.print(beat_mask)
-            tf.print(position_mask)
-            tf.print(duration_mask)
-            tf.print(pitch_mask)
-            tf.print(instruments_mask)
-            tf.print(velocity_mask)
-            tf.print(key_sign_mask)
-            tf.print(time_sign_mask)
-            tf.print(tempo_mask)
-            """
-            
             # tf.print("3456 before")
-
+            tmp_return = tf.concat(
+                [
+                    self.default_mask[0], # ???
+                    self.default_mask[1], # bad
+                    self.default_mask[2], # bad
+                    self.default_mask[3], # bad
+                    self.default_mask[4], # ???
+                    self.default_mask[5], # bad
+                    self.default_mask[6], # bad
+                    self.default_mask[7], # bad
+                    self.default_mask[8], # ???
+                    self.default_mask[9], # bad
+                ], axis=-1)
+            """ 
+            measure_mask =      self.default_mask[0]
+            beat_mask =         self.default_mask[1]
+            position_mask =     self.default_mask[2]
+            duration_mask =     self.default_mask[3]
+            pitch_mask =        self.default_mask[4]
+            instruments_mask =  self.default_mask[5]
+            velocity_mask =     self.default_mask[6]
+            key_sign_mask =     self.default_mask[7]
+            time_sign_mask =    self.default_mask[8]
+            tempo_mask =        self.default_mask[9]
+            """
+            """ 
             tmp_return = tf.concat([
-                measure_mask, beat_mask, position_mask, duration_mask,
-                pitch_mask, instruments_mask, velocity_mask, key_sign_mask,
-                time_sign_mask, tempo_mask], axis=-1, name="concat_3456")
+                measure_mask, 
+                beat_mask, 
+                position_mask, 
+                duration_mask,
+                pitch_mask, 
+                instruments_mask, 
+                velocity_mask, 
+                key_sign_mask,
+                time_sign_mask, 
+                tempo_mask
+            ], axis=-1, name="concat_3456")
+             """
             # tf.print([x.shape for x in tmp_return])
             # tf.print("3456", tmp_return)
 

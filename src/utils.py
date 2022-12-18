@@ -238,18 +238,17 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
 
                             Description                                                     Interval                                                Possible values
     (
-        type,               # see below -->                                                 [0, 7] -->                                              8
-        measure,            # index of the measure inside the song in interval -->          [0, last_measure] -->                                   512?
-        beat,               # index of beat inside measure -->                              [0, numerator of time_signature] -->                    132 (max numerator allowed)
-        position,           # index with 1/64 beat length granularity -->                   [0, 63/64] -->                                          64
-        duration,           # hierarchical structure? -->                                   [0, ~50] -->                                            136                                  
-        pitch,              # height of pitch (128) + drums (another 128) -->               [0, 255] -->                                            256
-        instrument_type,    # 128 instrument types dr -->                                   [0, 128] -->                                            129
-        n_instrument(*),    # same instrument twice in the song for multiple voices -->     [0, 7??] -->                                            8
-        velocity,           # amplitude of note, strength of play -->                       [0, 127] -->                                            128
-        key_sign,           # [0,11] (all possible notes) and [maj,min] -->                 [0, 23] -->                                             24
-        time_sign,          # denominator pow(2) in [1,64] and numerator int in [0,128] --> ??? better to specify after dataset exploration
-        tempo,              # qpm, geometric progression from 16 to 256 -->                 [0, 48] -->                                             49
+        0-type,               # see below -->                                                 [0, 7] -->                                              8
+        1-measure,            # index of the measure inside the song in interval -->          [0, last_measure] -->                                   512?
+        2-beat,               # index of beat inside measure -->                              [0, numerator of time_signature] -->                    132 (max numerator allowed)
+        3-position,           # index with 1/64 beat length granularity -->                   [0, 63/64] -->                                          64
+        4-duration,           # hierarchical structure? -->                                   [0, ~50] -->                                            136                                  
+        5-pitch,              # height of pitch (128) + drums (another 128) -->               [0, 255] -->                                            256
+        6-instrument_type,    # 128 instrument types dr -->                                   [0, 128] -->                                            129
+        7-velocity,           # amplitude of note, strength of play -->                       [0, 127] -->                                            128
+        8-key_sign,           # [0,11] (all possible notes) and [maj,min] -->                 [0, 23] -->                                             24
+        9-time_sign,          # denominator pow(2) in [1,64] and numerator int in [0,128] --> ??? better to specify after dataset exploration
+        10-tempo,              # qpm, geometric progression from 16 to 256 -->                 [0, 48] -->                                             49
     )
 
     type:

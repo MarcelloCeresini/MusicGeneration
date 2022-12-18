@@ -177,30 +177,30 @@ class Config:
     
         self.full_mask = [
             # np.asarray([True]*self.INPUT_RANGES["type"], dtype=np.bool8),
-            np.asarray([True]*self.INPUT_RANGES["measure"],dtype=np.bool8),
-            np.asarray([True]*self.INPUT_RANGES["beat"],dtype=np.bool8),
-            np.asarray([True]*self.INPUT_RANGES["position"],dtype=np.bool8),
-            np.asarray([True]*self.INPUT_RANGES["duration"],dtype=np.bool8),
-            np.asarray([True]*self.INPUT_RANGES["pitch"],dtype=np.bool8),
-            np.asarray([True]*self.INPUT_RANGES["instrument"],dtype=np.bool8),
-            np.asarray([True]*self.INPUT_RANGES["velocity"],dtype=np.bool8),
-            np.asarray([True]*self.INPUT_RANGES["key_sign"],dtype=np.bool8),
-            np.asarray([True]*self.INPUT_RANGES["time_sign"],dtype=np.bool8),
-            np.asarray([True]*self.INPUT_RANGES["tempo"], dtype=np.bool8)
+            tf.ones(self.INPUT_RANGES["measure"], "bool"),
+            tf.ones(self.INPUT_RANGES["beat"], "bool"),
+            tf.ones(self.INPUT_RANGES["position"], "bool"),
+            tf.ones(self.INPUT_RANGES["duration"], "bool"),
+            tf.ones(self.INPUT_RANGES["pitch"], "bool"),
+            tf.ones(self.INPUT_RANGES["instrument"], "bool"),
+            tf.ones(self.INPUT_RANGES["velocity"], "bool"),
+            tf.ones(self.INPUT_RANGES["key_sign"], "bool"),
+            tf.ones(self.INPUT_RANGES["time_sign"], "bool"),
+            tf.ones(self.INPUT_RANGES["tempo"], "bool"),
         ]
 
         self.default_mask = [
             # np.asarray([True] + [False]*(self.INPUT_RANGES["type"]-1), dtype=np.bool8),
-            np.asarray([True] + [False]*(self.INPUT_RANGES["measure"]-1), dtype=np.bool8),
-            np.asarray([True] + [False]*(self.INPUT_RANGES["beat"]-1), dtype=np.bool8),
-            np.asarray([True] + [False]*(self.INPUT_RANGES["position"]-1), dtype=np.bool8),
-            np.asarray([True] + [False]*(self.INPUT_RANGES["duration"]-1), dtype=np.bool8),
-            np.asarray([True] + [False]*(self.INPUT_RANGES["pitch"]-1), dtype=np.bool8),
-            np.asarray([True] + [False]*(self.INPUT_RANGES["instrument"]-1), dtype=np.bool8),
-            np.asarray([True] + [False]*(self.INPUT_RANGES["velocity"]-1), dtype=np.bool8),
-            np.asarray([True] + [False]*(self.INPUT_RANGES["key_sign"]-1), dtype=np.bool8),
-            np.asarray([True] + [False]*(self.INPUT_RANGES["time_sign"]-1), dtype=np.bool8),
-            np.asarray([True] + [False]*(self.INPUT_RANGES["tempo"]-1), dtype=np.bool8)
+            tf.concat([tf.ones(1, "bool"),tf.zeros(self.INPUT_RANGES["measure"]-1,      "bool")], -1),
+            tf.concat([tf.ones(1, "bool"),tf.zeros(self.INPUT_RANGES["beat"]-1,         "bool")], -1),
+            tf.concat([tf.ones(1, "bool"),tf.zeros(self.INPUT_RANGES["position"]-1,     "bool")], -1),
+            tf.concat([tf.ones(1, "bool"),tf.zeros(self.INPUT_RANGES["duration"]-1,     "bool")], -1),
+            tf.concat([tf.ones(1, "bool"),tf.zeros(self.INPUT_RANGES["pitch"]-1,        "bool")], -1),
+            tf.concat([tf.ones(1, "bool"),tf.zeros(self.INPUT_RANGES["instrument"]-1,   "bool")], -1),
+            tf.concat([tf.ones(1, "bool"),tf.zeros(self.INPUT_RANGES["velocity"]-1,     "bool")], -1),
+            tf.concat([tf.ones(1, "bool"),tf.zeros(self.INPUT_RANGES["key_sign"]-1,     "bool")], -1),
+            tf.concat([tf.ones(1, "bool"),tf.zeros(self.INPUT_RANGES["time_sign"]-1,    "bool")], -1),
+            tf.concat([tf.ones(1, "bool"),tf.zeros(self.INPUT_RANGES["tempo"]-1,        "bool")], -1),
         ]
 
 

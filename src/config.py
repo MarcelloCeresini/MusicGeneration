@@ -3,12 +3,15 @@ import transformers
 import tensorflow as tf
 import os
 import math
-from datetime import datetime
 
 class Config:
     
-    def __init__(self, config_string, root_path, model_name='music_generation_tests'):
+    def __init__(self, config_string, root_path, 
+                model_type='GPT', model_name='music_generation_tests'):
 
+        assert model_type in ['GPT', 'XL'], f"Only GPT or XL are available model types. You chose {model_type}."
+        self.model_type = model_type
+        
         # SYSTEM INFO
         self.N_CPUS  = os.cpu_count()
         self.GPUS    = tf.config.experimental.list_physical_devices('GPU')
@@ -93,29 +96,55 @@ class Config:
 
         ### MODEL CONFIGURATIONS
         # DECODER
-        self.SEQ_LEN                        = 6144
-        self.TOKEN_DIM                      = 512
-        self.GENRE_DIM                      = 512
-        self.ATTENTION_BLOCKS               = 6
-        self.ATTENTION_HEADS                = 2
-        self.DECODER_ACTIVATION_FUNCTION    = "relu"
+        self.SEQ_LEN                         = 6144
+        self.TOKEN_DIM                       = 512
+        self.GENRE_DIM                       = 512
+        self.ATTENTION_BLOCKS                = 6
+        self.ATTENTION_HEADS                 = 2
 
-        # Custom configuration for using GPT2 as a standard transformer decoder
-        self.decoder_config = transformers.GPT2Config(
-            vocab_size=0, 
-            n_positions = self.SEQ_LEN, 
-            n_embd = self.TOKEN_DIM, 
-            n_layer = self.ATTENTION_BLOCKS, 
-            n_head = self.ATTENTION_HEADS, 
-            activation_function='relu',
-            reorder_and_upcast_attn = True
-        )
+        if self.model_type == 'XL':
+            self.DIV_VAL                     = 12
+            self.MODEL_DIM                   = self.TOKEN_DIM
+            self.EMBED_DIM                   = self.TOKEN_DIM
+            self.INNER_DIM                   = 2048
+            self.MEMORY_LEN                  = 512
+            self.HEAD_DIM                    = self.MODEL_DIM // self.ATTENTION_HEADS # 12
+        else:
+            self.DECODER_ACTIVATION_FUNCTION = "relu"
+
+        if self.model_type == 'XL':
+            # Custom configuration for using Transformer-XL
+            # Some of these were taken by 
+            # https://github.com/slSeanWU/jazz_transformer/blob/master/transformer_xl/model_aug.py
+            self.decoder_config = transformers.TransfoXLConfig(
+                vocab_size=0, 
+                div_val=self.DIV_VAL, 
+                n_head=self.ATTENTION_HEADS, 
+                n_layer=self.ATTENTION_BLOCKS, 
+                d_head=self.HEAD_DIM,
+                d_model=self.MODEL_DIM,
+                d_embed=self.EMBED_DIM,
+                d_inner=self.INNER_DIM,
+                mem_len=self.MEMORY_LEN,
+                attn_type=0
+            )
+        else:
+            # Custom configuration for using GPT2 as a standard transformer decoder
+            self.decoder_config = transformers.GPT2Config(
+                vocab_size=0, 
+                n_positions = self.SEQ_LEN, 
+                n_embd = self.TOKEN_DIM, 
+                n_layer = self.ATTENTION_BLOCKS, 
+                n_head = self.ATTENTION_HEADS, 
+                activation_function='relu',
+                reorder_and_upcast_attn = True
+            )
 
         # EMBEDDING LAYERS
         self.SINGLE_EMB_SIZE    = 64
 
         # DATASET CONFIGURATIONS
-        self.BATCH_SIZE         = 6
+        self.BATCH_SIZE         = 8 if model_type == 'XL' else 6
         self.GLOBAL_BATCH_SIZE  = self.BATCH_SIZE * self.num_devices
         self.SHUFFLE_SIZE       = 256
         self.PREFETCH_SIZE      = 32
@@ -127,10 +156,6 @@ class Config:
 
         self.CHECKPOINTS_DIR   = os.path.join(root_path, "training", "checkpoints", model_name)
         self.TRAINING_LOGS_DIR = os.path.join(root_path, "training", "logs", model_name)
-
-        ### To add custom scalars to the TensorBoard logs
-        # file_writer = tf.summary.create_file_writer(self.TRAINING_LOGS_PATH + "/metrics")
-        # file_writer.set_as_default()
 
         self.MODEL_CALLBACKS = [
             # at the end of training use model.load_weights(self.CHECKPOINT_PATH) to retrieve best weights
@@ -149,14 +174,7 @@ class Config:
                 monitor='val_loss',
                 patience=10,
                 restore_best_weights=True,
-            ),           
-            # tf.keras.callbacks.TensorBoard(
-            #     log_dir=os.path.join(self.TRAINING_LOGS_DIR, model_name),
-            #     histogram_freq=1,
-            #     write_graph=False,
-            #     write_steps_per_second=True,
-            #     embeddings_freq=5
-            # )
+            )
         ]
 
         self.INPUT_RANGES = {
@@ -176,44 +194,47 @@ class Config:
         self.input_ranges_sum = sum(self.INPUT_RANGES.values())
     
         self.full_mask = [
-            # np.asarray([True]*self.INPUT_RANGES["type"], dtype=np.bool8),
-            tf.ones(self.INPUT_RANGES["measure"],       "bool"),
-            tf.ones(self.INPUT_RANGES["beat"],          "bool"),
-            tf.ones(self.INPUT_RANGES["position"],      "bool"),
-            tf.ones(self.INPUT_RANGES["duration"],      "bool"),
-            tf.ones(self.INPUT_RANGES["pitch"],         "bool"),
-            tf.ones(self.INPUT_RANGES["instrument"],    "bool"),
-            tf.ones(self.INPUT_RANGES["velocity"],      "bool"),
-            tf.ones(self.INPUT_RANGES["key_sign"],      "bool"),
-            tf.ones(self.INPUT_RANGES["time_sign"],     "bool"),
-            tf.ones(self.INPUT_RANGES["tempo"],         "bool"),
+            np.asarray([True]*self.INPUT_RANGES["measure"], dtype=np.bool8),
+            np.asarray([True]*self.INPUT_RANGES["beat"], dtype=np.bool8),
+            np.asarray([True]*self.INPUT_RANGES["position"], dtype=np.bool8),
+            np.asarray([True]*self.INPUT_RANGES["duration"], dtype=np.bool8),
+            np.asarray([True]*self.INPUT_RANGES["pitch"], dtype=np.bool8),
+            np.asarray([True]*self.INPUT_RANGES["instrument"], dtype=np.bool8),
+            np.asarray([True]*self.INPUT_RANGES["velocity"], dtype=np.bool8),
+            np.asarray([True]*self.INPUT_RANGES["key_sign"], dtype=np.bool8),
+            np.asarray([True]*self.INPUT_RANGES["time_sign"], dtype=np.bool8),
+            np.asarray([True]*self.INPUT_RANGES["tempo"], dtype=np.bool8),
         ]
 
         self.default_mask = [
-            # np.asarray([True] + [False]*(self.INPUT_RANGES["type"]-1), dtype=np.bool8),
-            tf.concat([tf.ones(1, "bool"),tf.zeros(self.INPUT_RANGES["measure"]-1,      "bool")], axis=-1),
-            tf.concat([tf.ones(1, "bool"),tf.zeros(self.INPUT_RANGES["beat"]-1,         "bool")], axis=-1),
-            tf.concat([tf.ones(1, "bool"),tf.zeros(self.INPUT_RANGES["position"]-1,     "bool")], axis=-1),
-            tf.concat([tf.ones(1, "bool"),tf.zeros(self.INPUT_RANGES["duration"]-1,     "bool")], axis=-1),
-            tf.concat([tf.ones(1, "bool"),tf.zeros(self.INPUT_RANGES["pitch"]-1,        "bool")], axis=-1),
-            tf.concat([tf.ones(1, "bool"),tf.zeros(self.INPUT_RANGES["instrument"]-1,   "bool")], axis=-1),
-            tf.concat([tf.ones(1, "bool"),tf.zeros(self.INPUT_RANGES["velocity"]-1,     "bool")], axis=-1),
-            tf.concat([tf.ones(1, "bool"),tf.zeros(self.INPUT_RANGES["key_sign"]-1,     "bool")], axis=-1),
-            tf.concat([tf.ones(1, "bool"),tf.zeros(self.INPUT_RANGES["time_sign"]-1,    "bool")], axis=-1),
-            tf.concat([tf.ones(1, "bool"),tf.zeros(self.INPUT_RANGES["tempo"]-1,        "bool")], axis=-1),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["measure"]-1), dtype=np.bool8),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["beat"]-1), dtype=np.bool8),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["position"]-1), dtype=np.bool8),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["duration"]-1), dtype=np.bool8),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["pitch"]-1), dtype=np.bool8),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["instrument"]-1), dtype=np.bool8),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["velocity"]-1), dtype=np.bool8),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["key_sign"]-1), dtype=np.bool8),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["time_sign"]-1), dtype=np.bool8),
+            np.asarray([True] + [False]*(self.INPUT_RANGES["tempo"]-1), dtype=np.bool8)
         ]
 
 
     def get_decoder(self):
         '''
-        Instantiate decoder from its corresponding configuration
+        Instantiate decoder from its corresponding configuration.
         '''
-        return transformers.TFGPT2Model(self.decoder_config)
+        if self.model_type == 'XL':
+            return transformers.TFTransfoXLModel(self.decoder_config)
+        else:
+            return transformers.TFGPT2Model(self.decoder_config)
 
     def get_positional_embedding_matrix(self):
         '''
         Obtain the positional encoding matrix for the decoder model.
         From "Attention is all you need", https://arxiv.org/pdf/1706.03762.pdf
+        This should only be used when the model type is "GPT", because Transformer-XL
+        uses its own relative positional embedding in the attention layers.
         '''
         PE = np.zeros((self.SEQ_LEN, self.TOKEN_DIM))
         for pos in range(self.SEQ_LEN):

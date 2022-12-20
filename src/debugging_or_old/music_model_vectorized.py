@@ -4,8 +4,6 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras import mixed_precision
 
-from transformers import GPT2Config, TFGPT2Model
-
 from config import Config
 
 ROOT_PATH = os.path.abspath(os.path.join(os.getcwd(), os.pardir))
@@ -33,13 +31,10 @@ class MaskTypeProbabilitiesLayer(tf.keras.layers.Layer):
     def __init__(self, trainable=False, name=None, dtype=None, dynamic=False, **kwargs):
         super().__init__(trainable, name, dtype, dynamic, **kwargs)
 
-
     @tf.function
     def mask_single_token_in_song(self, inputs):
-
         i, batch_gt_types = inputs
         token_type = batch_gt_types[i]
-
         if token_type == 0: # only start of song token: cannot be anything else than instrument choice (1)
             type_mask = tf.constant([False, True, False, False, False, False, False, False], dtype=tf.bool)
         elif token_type == 1: # we reached instrument choice: cannot be anything else than instrument choice (1) or start of events (2)
@@ -53,39 +48,32 @@ class MaskTypeProbabilitiesLayer(tf.keras.layers.Layer):
             # - if a 5 is missing, we only allow 5                                  --> [5]
             # - if a 6 is missing, we only allow 6                                  --> [6]
             # i+1 is needed because if current token_type is 5 it counts (otherwise it would always put 2 consecutive 5)
-
             # create mask for subsequent operations: 1 if idx<=i+1, 0 otherwise
             tmp_token_mask = tf.cast(tf.less_equal(
                 tf.range(conf.SEQ_LEN-1),
                 i+1
             ), dtype="float32")
-
             tmp_token_mask = tf.ensure_shape(tmp_token_mask, conf.SEQ_LEN-1)
-
             # create vector of 1s when type == 5 --> eliminate the ones after i+1 with multiply, then count them by summing 
             time_sign_occurrences = tf.reduce_sum(tf.math.multiply(
                 tf.cast(tf.math.equal(batch_gt_types, 5), dtype="float32"),
                 tmp_token_mask
             ))
-
             tempo_occurrences = tf.reduce_sum(tf.math.multiply(
                 tf.cast(tf.math.equal(batch_gt_types, 6), dtype="float32"),
                 tmp_token_mask
             ))
-
             if time_sign_occurrences == 0:
                 type_mask = tf.constant([False, False, False, False, False, True, False, False], dtype=tf.bool)
             elif tempo_occurrences == 0:
                 type_mask = tf.constant([False, False, False, False, False, False, True, False], dtype=tf.bool)
             else:
                 type_mask = tf.constant([False, False, False, True, True, True, True, True], dtype=tf.bool)
-            
         elif token_type == 7: # at the end of the song we can ONLY GUESS "700000000"
             type_mask = tf.constant([False, False, False, False, False, False, False, True], dtype=tf.bool)
         else:
             # ERROR. Define a random type mask so that it's defined in all branches for tf.function
             type_mask = tf.constant([False, False, False, False, False, False, False, False], dtype=tf.bool)
-
         return tf.ensure_shape(type_mask, 8)
 
 

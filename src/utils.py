@@ -33,13 +33,6 @@ def get_dataset_splits(path: str, conf: config.Config) -> Tuple[tf.data.Dataset,
     return train_dataset, val_dataset, test_dataset
             
 
-options = tf.data.Options()
-options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
-dataset = dataset.with_options(options)
-
-# TODO: Create a separate, fixed validation and test set
-train_dataset = dataset.skip(int(len(dataset)/5))
-val_dataset   = dataset.take(int(len(dataset)/5))
 
 def get_dataset(key: str, conf: config.Config) -> muspy.Dataset:
 

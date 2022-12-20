@@ -516,10 +516,11 @@ def create_model(conf:Config, input_shape=None, num_genres=None,
     sequence_concat_layer      = tf.keras.layers.Concatenate(axis=1)
     encoding_processing_layer  = tf.keras.layers.Dense(conf.TOKEN_DIM, name='encoding_processing')
     
-    # Positional encoding
-    positional_encoding_matrix = conf.get_positional_embedding_matrix()
-    positional_encoding        = tf.repeat(positional_encoding_matrix[tf.newaxis, :, :], tf.shape(songs)[0], axis=0)
-    sum_layer                  = tf.keras.layers.Add(name='final_encoding')
+    # Absolute positional encoding for GPT model
+    if conf.model_type == 'GPT':
+        positional_encoding_matrix = conf.get_positional_embedding_matrix()
+        positional_encoding        = tf.repeat(positional_encoding_matrix[tf.newaxis, :, :], tf.shape(songs)[0], axis=0)
+        sum_layer                  = tf.keras.layers.Add(name='final_encoding')
 
     # Output layers
     output_dense_layers = [
@@ -578,7 +579,8 @@ def create_model(conf:Config, input_shape=None, num_genres=None,
     input_embedding   = input_concat_layer(embeddings)
     input_embedding   = encoding_processing_layer(input_embedding)
     input_embedding   = sequence_concat_layer([genre_embedding[:, np.newaxis, :], input_embedding])
-    input_embedding   = sum_layer([input_embedding, positional_encoding])
+    if conf.model_type == 'GPT':
+        input_embedding   = sum_layer([input_embedding, positional_encoding])
     model_output      = decoder({'inputs_embeds': input_embedding})['last_hidden_state']
     out_scores        = [output_dense_layers[i](model_output)[:,:-1,:] 
                          for i in range(len(output_dense_layers))]

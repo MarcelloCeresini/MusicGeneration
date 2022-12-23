@@ -89,7 +89,7 @@ class InstrumentsChecker(tf.keras.layers.Layer):
             # Sum the number of undefined instruments in notes
             reg_term_2_2 = tf.math.reduce_sum(count_of_undefined_instruments)
             reg_term_2_list = reg_term_2_list.write(b, reg_term_2_1 + reg_term_2_2)
-        return tf.math.reduce_sum(reg_term_2_list.concat())
+        return tf.math.reduce_sum(reg_term_2_list.stack())
     
 
 # Custom layer that computes masks for type probabilities computation
@@ -630,8 +630,10 @@ def create_model(conf:Config, input_shape=None, num_genres=None,
     
     # Define loss
     def custom_loss(y_true, y_pred):
-        return loss_function(y_true, y_pred) * \
+        return tf.math.reduce_sum(
+            loss_function(y_true, y_pred) * \
             (1. / (conf.GLOBAL_BATCH_SIZE * tf.cast(tf.shape(y_true)[0], tf.float32)))
+        )
     
     # Define regularizers
     def custom_regularizers(y_pred):
@@ -673,8 +675,10 @@ def create_model(conf:Config, input_shape=None, num_genres=None,
         reg_term_3 = tf.math.reduce_sum(tf.cast(time_sep < 0, tf.int32))
         
         ####### PUT TOGETHER THE REGULARIZATION TERMS #######
-        return reg_scaler * ((tf.cast(reg_term_0, tf.float32)) + (tf.cast(reg_term_1, tf.float32)) + \
-                             (tf.cast(reg_term_2, tf.float32)) + (tf.cast(reg_term_3, tf.float32))) 
+        return tf.math.reduce_sum(
+            reg_scaler * ((tf.cast(reg_term_0, tf.float32)) + (tf.cast(reg_term_1, tf.float32)) + \
+                          (tf.cast(reg_term_2, tf.float32)) + (tf.cast(reg_term_3, tf.float32)))
+        )
     
     # Add losses
     for i, k in enumerate(conf.INPUT_RANGES):

@@ -43,13 +43,14 @@ class Config:
             "nes": os.path.join(self.DATA_PATH, "nes/"),
             "hymn": os.path.join(self.DATA_PATH, "hymn/"),
             "folk": os.path.join(self.DATA_PATH, "folk/"),
-            "lmd_matched": os.path.join(self.DATA_PATH, "lmd_matched/")
+            "lmd_matched": os.path.join(self.DATA_PATH, "lmd_matched/"),
+            "tf_data": os.path.join(self.DATA_PATH, "tf_data"),
+            "tf_data7": os.path.join(self.DATA_PATH, "tf_data7"),
+            "tf_data7dict": os.path.join(self.DATA_PATH, "tf_data7dict"),
+            "lmd_matched": os.path.join(self.DATA_PATH, "lmd_matched"),
+            "lmda_genres_tf_data": os.path.join(self.DATA_PATH, "lmda_genres_tf_data"),
+            "lmda_genres_tf_data7dict_final": os.path.join(self.DATA_PATH, "lmda_genres_tf_data7dict_final")
         }
-        self.tf_data_path = os.path.join(self.DATA_PATH, "tf_data")
-        self.tf_data7_path = os.path.join(self.DATA_PATH, "tf_data7")
-        self.tf_data7dict_path = os.path.join(self.DATA_PATH, "tf_data7dict")
-        self.lmdm_tf_data_path = os.path.join(self.DATA_PATH, "lmdm_tf_data")
-        self.lmda_genres_tf_data_path = os.path.join(self.DATA_PATH, "lmda_genres_tf_data")
 
         # NOTATION DEFINITIONS
         # Tempo
@@ -150,7 +151,7 @@ class Config:
         self.PREFETCH_SIZE      = 32
 
         # TRAINING SETUP
-        self.REG_LOSS_SCALE     = 0.001
+        self.REG_LOSS_SCALE     = 0.0001
         self.USE_MASKING        = True
         self.DROPOUT_VALUE      = 0.5
 

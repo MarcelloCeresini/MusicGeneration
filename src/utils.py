@@ -9,13 +9,18 @@ import config
 
 def get_dataset_splits(path: str, conf: config.Config) -> Tuple[tf.data.Dataset, tf.data.Dataset, tf.data.Dataset]:
     whole_dataset = tf.data.Dataset.load(path)
+    
+    options = tf.data.Options()
+    options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+    whole_dataset = whole_dataset.with_options(options)
+    
     train_split = int(len(whole_dataset)/10)*8                  # 80%
     val_split = int(len(whole_dataset)/10)*8                    # 10%
     test_split = len(whole_dataset) - val_split - train_split   # 10%
 
     train_dataset = whole_dataset.take(train_split)
-    val_dataset = whole_dataset.skip(train_split).take(val_split)
-    test_dataset = whole_dataset.skip(train_split+val_split).take(test_split)
+    val_dataset   = whole_dataset.skip(train_split).take(val_split)
+    test_dataset  = whole_dataset.skip(train_split+val_split).take(test_split)
 
     train_dataset = train_dataset.batch(conf.GLOBAL_BATCH_SIZE).\
                                     cache().\
@@ -31,7 +36,6 @@ def get_dataset_splits(path: str, conf: config.Config) -> Tuple[tf.data.Dataset,
                                     prefetch(conf.PREFETCH_SIZE)
 
     return train_dataset, val_dataset, test_dataset
-            
 
 
 def get_dataset(key: str, conf: config.Config) -> muspy.Dataset:

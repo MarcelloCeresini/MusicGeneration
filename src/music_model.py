@@ -663,14 +663,17 @@ def create_model(conf:Config, input_shape=None, num_genres=None,
         max_pred_beats = tf.argmax(y_pred[2], axis=2, output_type=tf.int32)
         max_pred_positions = tf.argmax(y_pred[3], axis=2, output_type=tf.int32)
         # Use them to compute the "times" matrix
-        times = max_pred_measures*max_pred_beats + max_pred_positions*max_pred_beats
-        # TODO: What did he mean by "numeratore"?
+        times = max_pred_measures*conf.INPUT_RANGES['beat']*conf.INPUT_RANGES['position'] + \
+            max_pred_beats*conf.INPUT_RANGES['position'] + \
+            max_pred_positions
+        # Normalize times
+        times = times / ((conf.INPUT_RANGES['measure']+1)*conf.INPUT_RANGES['beat']*conf.INPUT_RANGES['position'])
         # Only consider the time matrix when the type is between 3 and 6
         times = tf.cast(tf.where(tf.logical_and(max_pred_types >= 3, max_pred_types <= 6), times, 0), tf.float32)
         # For type 7 fill with a very large value
         times = tf.where(max_pred_types == 7, 1e10, times)
         # Compute time differences between consecutive time steps
-        time_sep = times[1:] - times[:-1]
+        time_sep = times[:, 1:] - times[:, :-1]
         # Count negative time seps
         reg_term_3 = tf.math.reduce_sum(tf.cast(time_sep < 0, tf.int32))
         

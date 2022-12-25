@@ -151,7 +151,7 @@ class Config:
         self.PREFETCH_SIZE      = 32
 
         # TRAINING SETUP
-        self.REG_LOSS_SCALE     = 0.0001
+        self.REG_LOSS_SCALE     = 0.00001
         self.USE_MASKING        = True
         self.DROPOUT_VALUE      = 0.5
 
@@ -173,7 +173,7 @@ class Config:
             ),
             tf.keras.callbacks.EarlyStopping(
                 monitor='val_loss',
-                patience=10,
+                patience=20,
                 restore_best_weights=True,
             )
         ]

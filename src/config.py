@@ -152,6 +152,7 @@ class Config:
 
         # TRAINING SETUP
         self.REG_LOSS_SCALE     = 0.00001
+        self.LEARNING_RATE      = 0.0001
         self.USE_MASKING        = True
         self.DROPOUT_VALUE      = 0.5
 
@@ -168,7 +169,7 @@ class Config:
             ),
             tf.keras.callbacks.ReduceLROnPlateau(
                 monitor="val_loss",
-                factor=0.1,
+                factor=0.2,
                 patience=8
             ),
             tf.keras.callbacks.EarlyStopping(

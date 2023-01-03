@@ -700,5 +700,5 @@ def create_model(conf:Config, input_shape=None, num_genres=None,
         model.add_metric(reg_loss, name='regularization_loss')
     
     # Compile and return
-    model.compile(optimizer="adam")
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=conf.LEARNING_RATE))
     return model

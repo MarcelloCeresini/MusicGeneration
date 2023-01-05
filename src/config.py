@@ -152,6 +152,7 @@ class Config:
 
         # TRAINING SETUP
         self.REG_LOSS_SCALE     = 0.00001
+        self.MSE_SCALE          = 5
         self.LEARNING_RATE      = 0.0001
         self.USE_MASKING        = True
         self.DROPOUT_VALUE      = 0.5

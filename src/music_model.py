@@ -408,20 +408,19 @@ class MaskingActivationLayer(tf.keras.layers.Layer):
         '''
         Inputs:
         - songs:                BATCH*(SEQ_LEN-1)*11
-        - out_logits:           BATCH*(SEQ_LEN-1)*1391 (all except type)
+        - out_logits:           BATCH*(SEQ_LEN-1)*1391 or 1264 (all except type and optionally velocity)
         - types_probabilities:  BATCH*(SEQ_LEN-1)*8 --> becomes chosen_types through argmax --> BATCH*(SEQ_LEN-1)*1
 
         passes through map_fn --> get_mask_fro_all_tokens to debatch
         '''
         songs, out_logits, types_probabilities = inputs
         chosen_types  = tf.expand_dims(tf.math.argmax(types_probabilities, axis=2), axis=-1)
-        concat_logits = tf.concat(out_logits[1:], axis=-1)                 # Concatenate all logits (except type) into a tensor batch_size x seq_len x 1391
         
         masks = tf.map_fn(
             fn=self.get_mask_for_one_elem_in_batch, 
             elems=(         # Iterate function over batch dimension 
-                tf.cast(chosen_types, concat_logits.dtype),                 # BATCH*(SEQ_LEN-1)*1
-                tf.cast(songs,   concat_logits.dtype),                      # BATCH*(SEQ_LEN-1)*11
+                tf.cast(chosen_types, out_logits[0].dtype),    # BATCH*(SEQ_LEN-1)*1
+                tf.cast(songs,        out_logits[0].dtype),    # BATCH*(SEQ_LEN-1)*11
             ),
             fn_output_signature=tf.TensorSpec(                              
                 (
@@ -437,12 +436,13 @@ class MaskingActivationLayer(tf.keras.layers.Layer):
 # Model creation function (to be called within a scope in case of MultiGPU training)
 def create_model(conf:Config, input_shape=None, num_genres=None, 
                  use_regularization=True, use_masking_layers=True, 
-                 reg_loss_scale=None):
+                 use_mse_for_velocity=True, reg_loss_scale=None):
     '''
     General model creation function. By default it generates a model which uses regulariazion and doesn't use
     masking, but this can be changed by manipulating the boolean flags `use_regularization` and `use_masking_layers`.
     It requires a `Config` object containing all hyperparameters of the model and optionally accepts an input shape, 
-    the number of possible genres for classification, and a regularization scaling factor.
+    the number of possible genres for classification, and a regularization scaling factor. Also, it has an additional
+    parameter for setting MSE as a loss for velocity rather than cross-entropy.
     '''
     # Defaults taken from conf object
     if input_shape is None:
@@ -464,8 +464,8 @@ def create_model(conf:Config, input_shape=None, num_genres=None,
     genres = tf.keras.Input(shape=num_genres , name='genres', dtype=tf.float32)
     
     # Define loss
-    loss_function = tf.keras.losses.SparseCategoricalCrossentropy(
-        reduction=tf.keras.losses.Reduction.NONE)
+    cross_entropy_loss_function = tf.keras.losses.SparseCategoricalCrossentropy(reduction=tf.keras.losses.Reduction.NONE)
+    velocity_loss_function = tf.keras.losses.MeanSquaredError(reduction=tf.keras.losses.Reduction.NONE)
 
     # Regularization layers
     if use_regularization:
@@ -538,8 +538,9 @@ def create_model(conf:Config, input_shape=None, num_genres=None,
         tf.keras.layers.Dense(conf.INPUT_RANGES['pitch'],      name='pitch_scores'),
         # Instrument
         tf.keras.layers.Dense(conf.INPUT_RANGES['instrument'], name='instrument_scores'),
-        # Velocity
-        tf.keras.layers.Dense(conf.INPUT_RANGES['velocity'],   name='velocity_scores'),
+        # Velocity (if we use MSE loss the layer has a single dense output here)
+        tf.keras.layers.Dense(conf.INPUT_RANGES['velocity'],   name='velocity_scores') \
+            if not use_mse_for_velocity else tf.keras.layers.Dense(1, name='velocity_values'),
         # Key sign
         tf.keras.layers.Dense(conf.INPUT_RANGES['key_sign'],   name='keysign_scores'),
         # Time sign
@@ -548,7 +549,7 @@ def create_model(conf:Config, input_shape=None, num_genres=None,
         tf.keras.layers.Dense(conf.INPUT_RANGES['tempo'],      name='tempo_scores')
     ]
     
-    output_probs_layers = [
+    output_layers = [
         # Type
         tf.keras.layers.Softmax(name='type_probabilities'),
         # Measure
@@ -563,8 +564,9 @@ def create_model(conf:Config, input_shape=None, num_genres=None,
         tf.keras.layers.Softmax(name='pitch_probabilities'),
         # Instrument
         tf.keras.layers.Softmax(name='instrument_probabilities'),
-        # Velocity
-        tf.keras.layers.Softmax(name='velocity_probabilities'),
+        # Velocity (if we use MSE loss for velocity, this is a simple linear activation)
+        tf.keras.layers.Softmax(name='velocity_probabilities') \
+            if not use_mse_for_velocity else tf.keras.activations.linear,
         # Key sign
         tf.keras.layers.Softmax(name='keysign_probabilities'),
         # Time sign
@@ -587,7 +589,9 @@ def create_model(conf:Config, input_shape=None, num_genres=None,
     
     if use_masking_layers:
         type_mask           = type_masking_layer(songs, training=True)
-        types_probabilities = output_probs_layers[0](out_scores[0], type_mask) # BATCH_SIZE * SEQ_LEN-1 * 8
+        types_probabilities = output_layers[0](out_scores[0], type_mask) # BATCH_SIZE * SEQ_LEN-1 * 8
+        # NOTE: the activations masking layer always computes all masks, even if we end up
+        # not using them, like in the case of MSE loss for velocity.
         full_mask           = activations_masking([songs, out_scores, types_probabilities])
         # Unpack the final masks into a list of masks
         index = 0; masks = []          
@@ -596,21 +600,25 @@ def create_model(conf:Config, input_shape=None, num_genres=None,
                 masks.append(full_mask[:, :, index:index+conf.INPUT_RANGES[key]])
                 index += conf.INPUT_RANGES[key]
         # Call all the softmax layers
-        out_probabilities = [types_probabilities] + [
-            output_probs_layers[i](out_scores[i], masks[i-1]) 
-            for i in range(1, len(output_dense_layers))]
+        out_values = [types_probabilities]
+        for i in range(1, len(output_dense_layers)):
+            # If we use MSE for velocity as a loss, we ignore the seventh mask
+            if use_mse_for_velocity and i == 7:
+                out_values.append(output_layers[i](out_scores[i]))
+            else:
+                out_values.append(output_layers[i](out_scores[i], masks[i-1]))
     else:
-        out_probabilities = [output_probs_layers[i](out_scores[i]) 
-                            for i in range(len(output_dense_layers))]
+        out_values = [output_layers[i](out_scores[i]) 
+                      for i in range(len(output_dense_layers))]
                 
-    out_probabilities_dict = {
-        key: out_probabilities[i] 
+    out_dict = {
+        key: out_values[i] 
         for i, key in enumerate(conf.INPUT_RANGES)
     }
 
     # Create model
     model = tf.keras.Model(inputs=[songs, genres], 
-                           outputs=out_probabilities_dict, 
+                           outputs=out_dict, 
                            name='music_generation_model')
     
     # Before computing losses, mask probabilities so that nothing after the first 7
@@ -629,11 +637,13 @@ def create_model(conf:Config, input_shape=None, num_genres=None,
     end_song_mask = tf.cast(end_song_mask, tf.bool)
     
     # Define loss
-    def custom_loss(y_true, y_pred):
-        return tf.math.reduce_sum(
-            loss_function(y_true, y_pred) * \
-            (1. / (conf.GLOBAL_BATCH_SIZE * tf.cast(tf.shape(y_true)[0], tf.float32)))
-        )
+    def custom_loss(y_true, y_pred, key):
+        loss_scale = (1. / (conf.GLOBAL_BATCH_SIZE * tf.cast(tf.shape(y_true)[0], tf.float32)))
+        if use_mse_for_velocity and key == 'velocity':
+            y_true = y_true / conf.INPUT_RANGES[key]
+            return tf.math.reduce_sum(velocity_loss_function(y_true, y_pred) * loss_scale * conf.MSE_SCALE)   # Scale up to make it comparable to other losses
+        else:
+            return tf.math.reduce_sum(cross_entropy_loss_function(y_true, y_pred) * loss_scale)
     
     # Define regularizers
     def custom_regularizers(y_pred):
@@ -641,7 +651,7 @@ def create_model(conf:Config, input_shape=None, num_genres=None,
         max_pred_types = tf.argmax(y_pred[0], axis=2, output_type=tf.int32)
         
         ####### 0: MISC CONSTRAINTS ABOUT TOKEN TYPES ORDER #######
-        reg_term_0 = misc_type_checker(max_pred_types) * 20   # *20 to keep it comparable to other losses
+        reg_term_0 = misc_type_checker(max_pred_types) * 20   # *20 to keep it comparable to other regularization losses
         
         ####### 1: PUNISHMENT FOR NON-CONSECUTIVE TYPES ##########
         consecutive_pred_types = subsequent_type_transform_layer(max_pred_types)
@@ -687,18 +697,18 @@ def create_model(conf:Config, input_shape=None, num_genres=None,
     for i, k in enumerate(conf.INPUT_RANGES):
         loss_name = f'{k}_loss'
         gt = tf.boolean_mask(songs[:,:,i], end_song_mask)
-        pred = tf.boolean_mask(out_probabilities[i], end_song_mask)
-        loss = custom_loss(y_true = gt, y_pred = pred)
+        pred = tf.boolean_mask(out_values[i], end_song_mask)
+        loss = custom_loss(y_true = gt, y_pred = pred, key = k)
         model.add_loss(loss)
         model.add_metric(loss, name=loss_name)
     
     if use_regularization:
         # Note: we don't mask in regularization, because we don't use a ground truth
         # Here we just make the model learn how to produce a syntactically good output.
-        reg_loss = custom_regularizers(out_probabilities)
+        reg_loss = custom_regularizers(out_values)
         model.add_loss(reg_loss)
         model.add_metric(reg_loss, name='regularization_loss')
     
     # Compile and return
     model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=conf.LEARNING_RATE))
-    return model
+    return model 

@@ -7,6 +7,10 @@ ENV/
 env.bak/
 venv.bak/
 
+# Files
+.python-version
+nesmdb_midi.tar
+
 # Folders
 training
 data

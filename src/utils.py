@@ -217,7 +217,8 @@ def add_notes(final_song: list, notes: np.array, settings: dict, t_init: int, me
                 # position is defined as a fraction of a beat --> find the float [0,1] dividing time for beat, and find the closest fraction
                 np.argmin(np.abs(
                     conf.np_positions -
-                    ((note[0] - t_init) % settings["measure"]) % settings["beat"])),
+                    ((note[0] - t_init) % settings["measure"]) % settings["beat"])
+                ),
                 np.argmin(np.abs(conf.np_durations - note[2])),
                 note[1],
                 note[4],
@@ -270,17 +271,17 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
 
                             Description                                                     Interval                                                Possible values
     (
-        0-type,               # see below -->                                                 [0, 7] -->                                              8
-        1-measure,            # index of the measure inside the song in interval -->          [0, last_measure] -->                                   512?
-        2-beat,               # index of beat inside measure -->                              [0, numerator of time_signature] -->                    132 (max numerator allowed)
-        3-position,           # index with 1/64 beat length granularity -->                   [0, 63/64] -->                                          64
-        4-duration,           # hierarchical structure? -->                                   [0, ~50] -->                                            136                                  
-        5-pitch,              # height of pitch (128) + drums (another 128) -->               [0, 255] -->                                            256
-        6-instrument_type,    # 128 instrument types dr -->                                   [0, 128] -->                                            129
-        7-velocity,           # amplitude of note, strength of play -->                       [0, 127] -->                                            128
-        8-key_sign,           # [0,11] (all possible notes) and [maj,min] -->                 [0, 23] -->                                             24
-        9-time_sign,          # denominator pow(2) in [1,64] and numerator int in [0,128] --> ??? better to specify after dataset exploration
-        10-tempo,              # qpm, geometric progression from 16 to 256 -->                 [0, 48] -->                                             49
+        0-type,               # see below                                                     [0, 7]                                                  8
+        1-measure,            # index of the measure inside the song in interval              [0, last_measure]                                       512?
+        2-beat,               # index of beat inside measure                                  [0, numerator of time_signature]                        132 (max numerator allowed)
+        3-position,           # index with 1/64 beat length granularity                       [0, 63/64]                                              64
+        4-duration,           # hierarchical structure?                                       [0, ~50]                                                136                                  
+        5-pitch,              # height of pitch (128) + drums (another 128)                   [0, 255]                                                256
+        6-instrument_type,    # 128 instrument types dr                                       [0, 128]                                                129
+        7-velocity,           # amplitude of note, strength of play                           [0, 127]                                                128
+        8-key_sign,           # [0,11] (all possible notes) and [maj,min]                     [0, 23]                                                 24
+        9-time_sign,          # denominator pow(2) in [1,64] and numerator int in [0,128]     ??? better to specify after dataset exploration
+        10-tempo,             # qpm, geometric progression from 16 to 256                     [0, 48]                                                 49
     )
 
     type:
@@ -331,6 +332,8 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
             # different conf_string may change this ####################################
             # add each instrument with (1, 0, 0, 0, 0, 0, program, 0, 0, 0, 0)
             final_song.append(tuple([1]+ [0]*5 +[track.program]+ [0]*4 ))
+
+            
 
     # start of events
     final_song.append(tuple([2]+[0]*(conf.tuple_size-1)))
@@ -594,3 +597,7 @@ def one_hot_encode_labels_nmf(string: str):
     else:
         raise ValueError("Not implemented")
 
+
+
+def anti_tranform_representation(song):
+    pass

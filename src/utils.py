@@ -15,7 +15,7 @@ def get_dataset_splits(path: str, conf: config.Config) -> Tuple[tf.data.Dataset,
     whole_dataset = whole_dataset.with_options(options)
     
     train_split = int(len(whole_dataset)/10)*8                  # 80%
-    val_split = int(len(whole_dataset)/10)*8                    # 10%
+    val_split = int(len(whole_dataset)/10)*1                    # 10%
     test_split = len(whole_dataset) - val_split - train_split   # 10%
 
     train_dataset = whole_dataset.take(train_split)
@@ -183,7 +183,16 @@ def tempo_repr(tempo: float, measure: int, conf: config.Config = None) -> Tuple:
         return (6, measure, 0, 0, 0, 0, 0, 0, 0, 0, tempo_index)
 
 
-def add_notes(final_song: list, notes: np.array, settings: dict, t_init: int, measure_init: int, time_interval: int, conf: config.Config, debug=False):
+def add_notes(
+        final_song: list, 
+        notes: np.array, 
+        settings: dict, 
+        t_init: int, 
+        measure_init: int, 
+        time_interval: int, 
+        conf: config.Config, 
+        debug=False
+    ):
     '''
     Central function that translates each note from current note to next "event" into its tuple representation
     
@@ -198,13 +207,15 @@ def add_notes(final_song: list, notes: np.array, settings: dict, t_init: int, me
     '''
     
     i = 0
+    interval_finish_time = t_init + time_interval
 
     while i < len(notes):
         note = notes[i]
-        i+=1
 
-        if note[0] >= t_init + time_interval:
-            break # should go into the second return
+        if note[0] >= interval_finish_time:
+            break # goes to the second return, all the notes after i (included i), will be returned
+
+        i+=1
 
         if conf.config_string == "complete":
             raise NotImplementedError("Not yet implemented")
@@ -219,7 +230,7 @@ def add_notes(final_song: list, notes: np.array, settings: dict, t_init: int, me
                     conf.np_positions -
                     ((note[0] - t_init) % settings["measure"]) % settings["beat"])
                 ),
-                np.argmin(np.abs(conf.np_durations - note[2])),
+                np.argmin(np.abs(conf.np_durations - (note[2]/settings["beat"]))),
                 note[1],
                 note[4],
                 note[3],
@@ -228,8 +239,6 @@ def add_notes(final_song: list, notes: np.array, settings: dict, t_init: int, me
                 tempo_map(settings["tempo"], conf)
             ))
     
-
-
     # if debug:
     #     if i < len(notes):
     #         print(t_init, time_interval, notes[i][0], t_init+time_interval)
@@ -245,13 +254,12 @@ def add_notes(final_song: list, notes: np.array, settings: dict, t_init: int, me
     #         print(i, len(notes))
     #         raise ValueError("???")
 
-
     if len(notes) == 0 or i >= len(notes):
 
         return (
             final_song,
-            [],
-            t_init + time_interval,
+            [], # no more notes, the song is over
+            interval_finish_time,
             final_song[-1][1] # the final measure --> cannot be more than 255
         )
     
@@ -259,7 +267,7 @@ def add_notes(final_song: list, notes: np.array, settings: dict, t_init: int, me
         return (
             final_song,
             notes[i:],
-            t_init + time_interval,
+            interval_finish_time,
             measure_init + (time_interval / settings["measure"])
         )
 
@@ -277,7 +285,7 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
         3-position,           # index with 1/64 beat length granularity                       [0, 63/64]                                              64
         4-duration,           # hierarchical structure?                                       [0, ~50]                                                136                                  
         5-pitch,              # height of pitch (128) + drums (another 128)                   [0, 255]                                                256
-        6-instrument_type,    # 128 instrument types dr                                       [0, 128]                                                129
+        6-instrument_type,    # 128 instrument types + 1 for drums                            [0, 128]                                                129
         7-velocity,           # amplitude of note, strength of play                           [0, 127]                                                128
         8-key_sign,           # [0,11] (all possible notes) and [maj,min]                     [0, 23]                                                 24
         9-time_sign,          # denominator pow(2) in [1,64] and numerator int in [0,128]     ??? better to specify after dataset exploration
@@ -316,7 +324,7 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
     '''
     
     # list of all notes/events
-    REJECT_SONG = False
+    # REJECT_SONG = False
 
     final_song = []
 
@@ -327,13 +335,15 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
         return [0]
 
     for track in song.tracks:
-        programs = []
+        programs = [] # we don't use this, but we could add a feature in the tuple to split different tracks of the same instrument
         if len(track.notes)>0 and (track.program not in set(programs)):
             # different conf_string may change this ####################################
             # add each instrument with (1, 0, 0, 0, 0, 0, program, 0, 0, 0, 0)
             final_song.append(tuple([1]+ [0]*5 +[track.program]+ [0]*4 ))
-
-            
+            if not conf.multiple_tracks_for_same_instrument:
+                programs.append(track.program)
+            else:
+                pass # in this way the same tuple will be added multiple times for the same instrument
 
     # start of events
     final_song.append(tuple([2]+[0]*(conf.tuple_size-1)))
@@ -478,6 +488,8 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
                 )
 
                 flag_new_event = True
+            else:
+                flag_new_event = False
 
         if event[1] == "time_sign":
             if event[2] != current_settings["time_sign"][0] or \
@@ -496,9 +508,11 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
                 if current_event == False:
                     return [1]
                 else:
-
                     flag_new_event = True
-        
+                
+            else:
+                flag_new_event = False
+
         if event[1] == "tempo":
             if event[2] != current_settings["tempo"]:
 
@@ -510,6 +524,8 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
                     conf
                 )
                 flag_new_event = True
+            else:
+                flag_new_event = False
 
 
         if flag_new_event:
@@ -523,6 +539,8 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
             # every note will be positioned with respect to this new timestep (measures, beats and positions are shifted)
             time_interval = (event[0] - delta_t) - current_time
             assert time_interval >= 0, "time interval: {}".format(time_interval)
+
+            final_song.append(current_event)
 
             # shouldn't do anything if there are no notes between current time and t+delta_t
             try:                
@@ -541,11 +559,11 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
                 print(notes[-10:])
                 print(song.metadata)
 
-
             current_settings = new_settings.copy()
             # beat is constant, onle measure length changes --> update it
-            final_song.append(current_event)
-            
+        
+        else:
+            pass
     ### sometimes events have timesteps > than last note!
 
     try:
@@ -556,7 +574,7 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
             current_settings,
             current_time,
             current_measure_index,
-            1e15, # just to be safe TODO improve it
+            1e15, # time_interval very big so that you catch all the notes TODO: improve it
             conf,
             debug=True
         ) # should append every note between current note and note finish

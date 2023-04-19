@@ -52,6 +52,9 @@ class Config:
             "lmda_genres_tf_data7dict_final": os.path.join(self.DATA_PATH, "lmda_genres_tf_data7dict_final")
         }
 
+        # TRANSFORM REPRESENTATION
+        self.multiple_tracks_for_same_instrument = True
+
         # NOTATION DEFINITIONS
         # Tempo
         max_tempo = 256

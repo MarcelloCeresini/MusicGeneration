@@ -564,9 +564,10 @@ def create_model(conf:Config, input_shape=None, num_genres=None,
         tf.keras.layers.Softmax(name='pitch_probabilities'),
         # Instrument
         tf.keras.layers.Softmax(name='instrument_probabilities'),
-        # Velocity (if we use MSE loss for velocity, this is a simple linear activation)
+        # Velocity (if we use MSE loss for velocity, this is a simple relu activation, 
+        # so that we can't get negative values for velocity)
         tf.keras.layers.Softmax(name='velocity_probabilities') \
-            if not use_mse_for_velocity else tf.keras.activations.linear,
+            if not use_mse_for_velocity else tf.keras.activations.relu,
         # Key sign
         tf.keras.layers.Softmax(name='keysign_probabilities'),
         # Time sign

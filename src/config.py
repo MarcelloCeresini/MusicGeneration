@@ -55,6 +55,9 @@ class Config:
         # TRANSFORM REPRESENTATION
         self.multiple_tracks_for_same_instrument = True
 
+        # ANTI-TRANSFORM REPRESENTATION
+        self.standard_resolution = 128
+
         # NOTATION DEFINITIONS
         # Tempo
         max_tempo = 256

@@ -4,6 +4,7 @@ import muspy
 import os, shutil, tarfile
 from tqdm import tqdm
 import tensorflow as tf
+import json
 
 import config
 
@@ -662,19 +663,27 @@ def tempo_inverse_map(tempo_own: int, conf: config.Config) -> int:
 
 
 def anti_tranform_representation(song: np.ndarray, conf: config.Config) -> muspy.music.Music:
-    metadata = {}
     resolution = conf.standard_resolution
     tempos = []
     time_signatures = []
     key_signatures = []
     tracks = []
+    tracks_instruments = []
 
     current_settings = {
-
+        "time": 0,
+        "numerator_time_sign": 4,
+        "measure": 0,
     }
 
     for tuple in song:
-        time = 0 # TODO: compute time given current settings and resolution, measure, beat, position
+        
+        # time calculation: settings are changed only if time_sign changes, so everything is related to the last time_sign change
+        position = conf.np_positions[tuple[3]]
+        beats_in_measure = current_settings["numerator_time_sign"]
+        beats_from_current_time = (tuple[1]-current_settings["measure"])*beats_in_measure + tuple[2] + position
+        time = current_settings["time"] + resolution*beats_from_current_time
+        
         if tuple[0] == 0:
             # start of inputs
             pass
@@ -684,19 +693,73 @@ def anti_tranform_representation(song: np.ndarray, conf: config.Config) -> muspy
             tracks.append({
                 "program": program,
                 "is_drum": is_drum,
+                "notes": [],
                 "name": str(np.random.randint(1e5)), # TODO: add name
-                "notes": []
             })
+            tracks_instruments.append(program)
+
         if tuple[0] == 2:
             # start of song
             pass
         if tuple[0] == 3:
             # note
-            # TODO: complete this
-            pass 
+            track = tuple[6] # find instrument
+            # OSS: this does NOT work if we allow more than one track with the same instrument in our representation
+            idx = tracks_instruments.index(track) # find the track with that instrument in the song
+            tracks[idx]["notes"].append({
+                "time": time,
+                "pitch": pitch_inverse_map(tuple[5]),
+                "duration": resolution*conf.np_durations[tuple[4]],
+                "velocity": tuple[7],
+            })
         if tuple[0] == 4:
             # key signature
-            key_signatures.append({
-                "time": tuple[1],
-                "key": key_sign_inverse_map(tuple[2])
+            key_signature_tmp = key_sign_inverse_map(tuple[8])
+            if key_signature_tmp is not None:
+                key_signatures.append({
+                    "time": time,
+                    "root": key_signature_tmp[0],
+                    "mode": key_signature_tmp[1],
+                })
+            else:
+                pass # song CAN have no key signatures
+        if tuple[0] == 5:
+            # time signature
+            numerator, denominator = time_sign_inverse_map(tuple[9], conf)
+            time_signatures.append({
+                "time": time,
+                "numerator": numerator,
+                "denominator": denominator,
             })
+
+            current_settings["time"] = time
+            current_settings["numerator_time_sign"] = numerator
+            current_settings["measure"] = tuple[1]
+
+        if tuple[0] == 6:
+            # tempo
+            qpm = tempo_inverse_map(tuple[10], conf)
+            tempos.append({
+                "time": time,
+                "qpm": qpm
+            })
+        
+        if tuple[0] == 7:
+            # end of song
+            pass
+
+    # create dict
+    song = {
+        "tracks": tracks,
+        "tempos": tempos,
+        "time_signatures": time_signatures,
+        "key_signatures": key_signatures,
+        "resolution": resolution,
+    }
+
+    path = os.path.join(conf.DATA_PATH, "generation", "tmp.json")
+
+    with open(path, "w") as f:
+        json.dump(song, f)
+
+    song_muspy = muspy.load_json(path)

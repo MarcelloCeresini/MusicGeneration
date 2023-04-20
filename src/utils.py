@@ -129,6 +129,16 @@ def get_dataset(key: str, conf: config.Config) -> muspy.Dataset:
         raise ValueError("This dataset is not implemented yet")
     
 
+def program_map(track_program: int, is_drum: bool) -> int:
+    '''Map muspy program to our program, if is_drum is True, return 128'''
+    return 128 if is_drum else track_program
+
+
+def pitch_map(pitch: int, track_is_drum: bool) -> int:
+    '''Map muspy pitch to our pitch, for now it just returns the pitch but it's here for flexible use'''
+    return pitch
+
+
 def key_sign_map(key_sign: Tuple, conf: config.Config) -> int:
     if key_sign[0] == -1:
         return 0
@@ -168,6 +178,7 @@ def time_sign_repr(time_sign: Tuple, measure: int, conf: config.Config) -> Tuple
         return (5, measure, 0, 0, 0, 0, 0, 0, 0, 0, time_sign_index, 0)
     elif conf.config_string == "single_instruments_type":
         return (5, measure, 0, 0, 0, 0, 0, 0, 0, time_sign_index, 0)
+
 
 def tempo_map(tempo: float, conf: config.Config = None) -> int:
     return np.argmin(np.abs(conf.np_tempos - tempo))
@@ -285,7 +296,7 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
         3-position,           # index with 1/64 beat length granularity                       [0, 63/64]                                              64
         4-duration,           # hierarchical structure?                                       [0, ~50]                                                136                                  
         5-pitch,              # height of pitch (128) + drums (another 128)                   [0, 255]                                                256
-        6-instrument_type,    # 128 instrument types + 1 for drums                            [0, 128]                                                129
+        6-instrument_type,    # 128 instrument types + 1 for drums                          [0, 255]                                                256
         7-velocity,           # amplitude of note, strength of play                           [0, 127]                                                128
         8-key_sign,           # [0,11] (all possible notes) and [maj,min]                     [0, 23]                                                 24
         9-time_sign,          # denominator pow(2) in [1,64] and numerator int in [0,128]     ??? better to specify after dataset exploration
@@ -336,12 +347,17 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
 
     for track in song.tracks:
         programs = [] # we don't use this, but we could add a feature in the tuple to split different tracks of the same instrument
-        if len(track.notes)>0 and (track.program not in set(programs)):
+
+        track_modified_program = program_map(track.program, track.is_drum)
+        assert track_modified_program <= 128, "track_modified_program must be < 128"
+        assert track_modified_program >= 0, "track_modified_program must be >= 0"
+
+        if len(track.notes)>0 and (track_modified_program not in set(programs)):
             # different conf_string may change this ####################################
             # add each instrument with (1, 0, 0, 0, 0, 0, program, 0, 0, 0, 0)
-            final_song.append(tuple([1]+ [0]*5 +[track.program]+ [0]*4 ))
+            final_song.append(tuple([1]+ [0]*5 +[track_modified_program]+ [0]*4 ))
             if not conf.multiple_tracks_for_same_instrument:
-                programs.append(track.program)
+                programs.append(track_modified_program)
             else:
                 pass # in this way the same tuple will be added multiple times for the same instrument
 
@@ -397,7 +413,6 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
                 events.append((tempo.time, "tempo", tempo.qpm))
 
 
-
     # sort events by timestep
     events.sort(key = lambda x: x[0])
 
@@ -423,20 +438,12 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
 
     j = 0
     for track in song.tracks:
-        if track.is_drum:
-            for i, note in enumerate(track.notes):
-                notes[j+i, 0] = note.time
-                notes[j+i, 1] = note.pitch + 128
-                notes[j+i, 2] = note.duration
-                notes[j+i, 3] = note.velocity
-                notes[j+i, 4] = track.program
-        else:
-            for i, note in enumerate(track.notes):
-                notes[j+i, 0] = note.time
-                notes[j+i, 1] = note.pitch
-                notes[j+i, 2] = note.duration
-                notes[j+i, 3] = note.velocity
-                notes[j+i, 4] = track.program
+        for i, note in enumerate(track.notes):
+            notes[j+i, 0] = note.time
+            notes[j+i, 1] = pitch_map(note.pitch, track.is_drum)
+            notes[j+i, 2] = note.duration
+            notes[j+i, 3] = note.velocity
+            notes[j+i, 4] = track.program
         
         j += len(track.notes)
 
@@ -616,6 +623,80 @@ def one_hot_encode_labels_nmf(string: str):
         raise ValueError("Not implemented")
 
 
+def program_inverse_map(program_own: int) -> Tuple[int, bool]:
+    '''
+        Returns the instrument/program number given our representation, plus "is_drum" = false
+        If it is a drum, returns ALWAYS 0 as a channel, and "is_drum" = True
+    '''
+    return (program_own, False) if program_own < 128 else (0, True) 
 
-def anti_tranform_representation(song):
-    pass
+
+def pitch_inverse_map(pitch_own: int) -> int:
+    '''Returns the pitch given our representation, now it does nothing but it's here for consistency'''
+    return pitch_own
+
+
+def key_sign_inverse_map(key_sign_own: int) -> Tuple[int, str] or None:
+    '''Returns the key signature given our representation'''
+    if key_sign_own == 0:
+        return None # TODO: do not add any key signature in json in this case
+    else:
+        if (key_sign_own-1) < 12:
+            mode = "major"
+        else:
+            mode = "minor"
+
+        return (key_sign_own-1) % 12, mode
+    
+
+def time_sign_inverse_map(time_sign_own: int, conf: config.Config) -> Tuple[int, int]:
+    '''Returns the time signature given our representation'''
+    numerator = conf.numerators[time_sign_own % conf.tot_numerators]
+    denominator = conf.denominators[time_sign_own // conf.tot_numerators]
+    return (numerator, denominator)
+
+
+def tempo_inverse_map(tempo_own: int, conf: config.Config) -> int:
+    '''Returns the tempo given our representation'''
+    return conf.np_tempos[tempo_own]
+
+
+def anti_tranform_representation(song: np.ndarray, conf: config.Config) -> muspy.music.Music:
+    metadata = {}
+    resolution = conf.standard_resolution
+    tempos = []
+    time_signatures = []
+    key_signatures = []
+    tracks = []
+
+    current_settings = {
+
+    }
+
+    for tuple in song:
+        time = 0 # TODO: compute time given current settings and resolution, measure, beat, position
+        if tuple[0] == 0:
+            # start of inputs
+            pass
+        if tuple[0] == 1:
+            # new instrument --> create new track
+            program, is_drum = program_inverse_map(tuple[6])
+            tracks.append({
+                "program": program,
+                "is_drum": is_drum,
+                "name": str(np.random.randint(1e5)), # TODO: add name
+                "notes": []
+            })
+        if tuple[0] == 2:
+            # start of song
+            pass
+        if tuple[0] == 3:
+            # note
+            # TODO: complete this
+            pass 
+        if tuple[0] == 4:
+            # key signature
+            key_signatures.append({
+                "time": tuple[1],
+                "key": key_sign_inverse_map(tuple[2])
+            })

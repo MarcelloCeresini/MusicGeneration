@@ -228,6 +228,22 @@ def add_notes(
             break # goes to the second return, all the notes after i (included i), will be returned
 
         i+=1
+        # print("i", i)
+        # print("measure", settings["measure"])
+        # print("beat",settings["beat"])
+
+        # print("position_value", (((note[0] - t_init) % settings["measure"]) % settings["beat"]) / settings["beat"]) 
+        
+        # # print("position_idx", 
+        # #       np.argmin(np.abs(
+        # #             conf.np_positions -
+        # #             ((note[0] - t_init) % settings["measure"]) % settings["beat"])
+        # #         )
+        # # )
+        
+        # print("t_init", t_init)
+        # print("-----")
+
 
         if conf.config_string == "complete":
             raise NotImplementedError("Not yet implemented")
@@ -240,8 +256,8 @@ def add_notes(
                 # position is defined as a fraction of a beat --> find the float [0,1] dividing time for beat, and find the closest fraction
                 np.argmin(np.abs(
                     conf.np_positions -
-                    ((note[0] - t_init) % settings["measure"]) % settings["beat"])
-                ),
+                    (((note[0] - t_init) % settings["measure"]) % settings["beat"]) / settings["beat"]
+                )),
                 np.argmin(np.abs(conf.np_durations - (note[2]/settings["beat"]))),
                 note[1],
                 note[4],
@@ -276,6 +292,10 @@ def add_notes(
         )
     
     else:
+        if debug:
+            print("settings while adding notes: ", settings)
+            print("measure of end of interval: ", measure_init + (time_interval / settings["measure"]))
+            print("time_interval: ", time_interval)
         return (
             final_song,
             notes[i:],
@@ -454,18 +474,15 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
     # number of timesteps per beat --> absolute_time = (60*metrical_time)/(tempo_qpm*resolution)
     resolution = song.resolution
 
-    current_beat_length = resolution
-
-    # n° of timesteps for each measure = resolution * nominator of time_sign (n° of beats in a measure)
-    current_measure_length = current_time_sign[0] * resolution
+    # measure_length = n° of timesteps for each measure = resolution * nominator of time_sign (n° of beats in a measure)
     
     current_settings = {
-        "key_sign": current_key_sign,       # tuple with (key, major/minor)
-        "time_sign": current_time_sign,     # tuple (nominator, denominator)
-        "tempo": current_tempo,             # float
-        "resolution": resolution,           # int
-        "measure": current_measure_length,  # int
-        "beat": current_beat_length         # int
+        "key_sign": current_key_sign,                   # tuple with (key, major/minor)
+        "time_sign": current_time_sign,                 # tuple (nominator, denominator)
+        "tempo": current_tempo,                         # float
+        "resolution": resolution,                       # int
+        "measure": current_time_sign[0] * resolution,   # int (THE LENGTH OF THE MEASURE)
+        "beat": resolution                              # int
     }
 
     # remember the number of the measure
@@ -537,8 +554,16 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
 
 
         if flag_new_event:
-            
-            if (delta_t := (event[0]-current_time) % current_measure_length) != 0:
+            debug=False
+            # if event[1] == "time_sign":
+            #     print("current_settings: ", current_settings)
+            #     print("new_settings: ", new_settings)
+            #     print("time: ", current_time)
+            #     print("measure: ", current_measure_index)
+            #     print("time_of_event: ", event[0])
+            #     debug=True
+
+            if (delta_t := (event[0]-current_time) % current_settings["measure"]) != 0:
                 # print(song.metadata)
                 # print(events)
                 pass
@@ -548,7 +573,10 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
             time_interval = (event[0] - delta_t) - current_time
             assert time_interval >= 0, "time interval: {}".format(time_interval)
 
-            final_song.append(current_event)
+            # if event[1] == "time_sign":
+            #     print("time_interval: ", time_interval)
+            #     print("raw_time_interval: ", (event[0] - current_time))
+            #     print("delta_t: ", delta_t)
 
             # shouldn't do anything if there are no notes between current time and t+delta_t
             try:                
@@ -559,13 +587,20 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
                     current_time,
                     current_measure_index,
                     time_interval,
-                    conf
+                    conf,
+                    debug
                 )
+                final_song.append(current_event)
 
             except:
                 print(events)
                 print(notes[-10:])
                 print(song.metadata)
+
+            # if event[1] == "time_sign":
+            #     print("time after adding notes: ", current_time)
+            #     print("measure after adding notes: ", current_measure_index)
+            #     print("--------------------")
 
             current_settings = new_settings.copy()
             # beat is constant, onle measure length changes --> update it
@@ -584,7 +619,7 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
             current_measure_index,
             1e15, # time_interval very big so that you catch all the notes TODO: improve it
             conf,
-            debug=True
+            debug=False
         ) # should append every note between current note and note finish
 
     except:
@@ -629,18 +664,18 @@ def program_inverse_map(program_own: int) -> Tuple[int, bool]:
         Returns the instrument/program number given our representation, plus "is_drum" = false
         If it is a drum, returns ALWAYS 0 as a channel, and "is_drum" = True
     '''
-    return (program_own, False) if program_own < 128 else (0, True) 
+    return (int(program_own), False) if program_own < 128 else (0, True) 
 
 
 def pitch_inverse_map(pitch_own: int) -> int:
     '''Returns the pitch given our representation, now it does nothing but it's here for consistency'''
-    return pitch_own
+    return int(pitch_own)
 
 
 def key_sign_inverse_map(key_sign_own: int) -> Tuple[int, str] or None:
     '''Returns the key signature given our representation'''
     if key_sign_own == 0:
-        return None # TODO: do not add any key signature in json in this case
+        return None
     else:
         if (key_sign_own-1) < 12:
             mode = "major"
@@ -681,17 +716,24 @@ def anti_tranform_representation(song: np.ndarray, conf: config.Config) -> muspy
         # time calculation: settings are changed only if time_sign changes, so everything is related to the last time_sign change
         position = conf.np_positions[tuple[3]]
         beats_in_measure = current_settings["numerator_time_sign"]
-        beats_from_current_time = (tuple[1]-current_settings["measure"])*beats_in_measure + tuple[2] + position
+        beats_from_current_time = (int(tuple[1])-current_settings["measure"])*beats_in_measure + int(tuple[2]) + position
         time = current_settings["time"] + resolution*beats_from_current_time
+
+        # if tuple[0] == 3 and tuple[6] == 26:
+        #     print("position: ", position)
+        #     print("beats_in_measure: ", beats_in_measure)
+        #     print("beats_from_current_time: ", beats_from_current_time)
+        #     print("time: ", time)
         
         if tuple[0] == 0:
             # start of inputs
             pass
+
         if tuple[0] == 1:
             # new instrument --> create new track
             program, is_drum = program_inverse_map(tuple[6])
             tracks.append({
-                "program": program,
+                "program": int(program),
                 "is_drum": is_drum,
                 "notes": [],
                 "name": str(np.random.randint(1e5)), # TODO: add name
@@ -701,6 +743,7 @@ def anti_tranform_representation(song: np.ndarray, conf: config.Config) -> muspy
         if tuple[0] == 2:
             # start of song
             pass
+
         if tuple[0] == 3:
             # note
             track = tuple[6] # find instrument
@@ -709,20 +752,22 @@ def anti_tranform_representation(song: np.ndarray, conf: config.Config) -> muspy
             tracks[idx]["notes"].append({
                 "time": time,
                 "pitch": pitch_inverse_map(tuple[5]),
-                "duration": resolution*conf.np_durations[tuple[4]],
-                "velocity": tuple[7],
+                "duration": resolution * conf.np_durations[tuple[4]],
+                "velocity": int(tuple[7]),
             })
+
         if tuple[0] == 4:
             # key signature
             key_signature_tmp = key_sign_inverse_map(tuple[8])
             if key_signature_tmp is not None:
                 key_signatures.append({
                     "time": time,
-                    "root": key_signature_tmp[0],
+                    "root": int(key_signature_tmp[0]),
                     "mode": key_signature_tmp[1],
                 })
             else:
-                pass # song CAN have no key signatures
+                pass # song CAN have no key signaturescer
+
         if tuple[0] == 5:
             # time signature
             numerator, denominator = time_sign_inverse_map(tuple[9], conf)
@@ -732,9 +777,15 @@ def anti_tranform_representation(song: np.ndarray, conf: config.Config) -> muspy
                 "denominator": denominator,
             })
 
+            # print("before")
+            # print(current_settings)
+            # print("beats_from_current_time {:.0f}".format(beats_from_current_time))
+            # print("time {:.2f}".format(time))
+
             current_settings["time"] = time
             current_settings["numerator_time_sign"] = numerator
             current_settings["measure"] = tuple[1]
+
 
         if tuple[0] == 6:
             # tempo
@@ -757,9 +808,11 @@ def anti_tranform_representation(song: np.ndarray, conf: config.Config) -> muspy
         "resolution": resolution,
     }
 
+    # return song
+
     path = os.path.join(conf.DATA_PATH, "generation", "tmp.json")
 
     with open(path, "w") as f:
         json.dump(song, f)
 
-    song_muspy = muspy.load_json(path)
+    return muspy.load_json(path)

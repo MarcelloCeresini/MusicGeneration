@@ -20,14 +20,6 @@ lmd_matched = utils.get_dataset("lmd_matched", conf)
 song = lmd_matched[0]
 print(type(song))
 
-if not (soundfont_path:=muspy.get_musescore_soundfont_dir()):
-    muspy.download_musescore_soundfont(overwrite=True)
-else:
-    print(soundfont_path)
-
-print(sys.path)
-sys.path.append(str(soundfont_path))
-print(sys.path)
 
 muspy.outputs.write_midi(
     path=os.path.join(ROOT_PATH, "data", "audio", "original_"+BACKEND_TO_CREATE_MIDI+".midi"),

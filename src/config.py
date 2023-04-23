@@ -44,12 +44,15 @@ class Config:
             "hymn": os.path.join(self.DATA_PATH, "hymn/"),
             "folk": os.path.join(self.DATA_PATH, "folk/"),
             "lmd_matched": os.path.join(self.DATA_PATH, "lmd_matched/"),
+
             "tf_data": os.path.join(self.DATA_PATH, "tf_data"),
             "tf_data7": os.path.join(self.DATA_PATH, "tf_data7"),
             "tf_data7dict": os.path.join(self.DATA_PATH, "tf_data7dict"),
             "lmd_matched": os.path.join(self.DATA_PATH, "lmd_matched"),
             "lmda_genres_tf_data": os.path.join(self.DATA_PATH, "lmda_genres_tf_data"),
-            "lmda_genres_tf_data7dict_final": os.path.join(self.DATA_PATH, "lmda_genres_tf_data7dict_final")
+            "lmda_genres_tf_data7dict_final": os.path.join(self.DATA_PATH, "lmda_genres_tf_data7dict_final"),
+            
+            "lmd_matched_final": os.path.join(self.DATA_PATH, "lmd_matched_final"),
         }
 
         # TRANSFORM REPRESENTATION

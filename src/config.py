@@ -52,7 +52,8 @@ class Config:
             "lmda_genres_tf_data": os.path.join(self.DATA_PATH, "lmda_genres_tf_data"),
             "lmda_genres_tf_data7dict_final": os.path.join(self.DATA_PATH, "lmda_genres_tf_data7dict_final"),
             
-            "lmd_matched_final": os.path.join(self.DATA_PATH, "lmd_matched_final"),
+            "lmd_matched_final_2048_cut": os.path.join(self.DATA_PATH, "lmd_matched_final_2048_cut"),
+            "lmd_matched_final_4096_cut": os.path.join(self.DATA_PATH, "lmd_matched_final_4096_cut"),
         }
 
         # TRANSFORM REPRESENTATION

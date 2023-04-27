@@ -107,7 +107,7 @@ class Config:
 
         ### MODEL CONFIGURATIONS
         # DECODER
-        self.SEQ_LEN                         = 6144
+        self.SEQ_LEN                         = 2048
         self.TOKEN_DIM                       = 512
         self.GENRE_DIM                       = 512
         self.ATTENTION_BLOCKS                = 6

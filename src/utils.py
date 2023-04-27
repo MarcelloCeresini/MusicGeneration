@@ -810,6 +810,9 @@ def anti_tranform_representation(song: np.ndarray, conf: config.Config) -> muspy
 
     # return song
 
+    if not os.path.isdir(os.path.join(conf.DATA_PATH, "generation")):
+        os.mkdir(os.path.join(conf.DATA_PATH, "generation"))
+    
     path = os.path.join(conf.DATA_PATH, "generation", "tmp.json")
 
     with open(path, "w") as f:

@@ -750,17 +750,18 @@ def anti_tranform_representation(song: np.ndarray, conf: config.Config) -> muspy
             # OSS: this does NOT work if we allow more than one track with the same instrument in our representation
             try:
                 idx = tracks_instruments.index(instrument) # find the track with that instrument in the song
-                
-                tracks[idx]["notes"].append({
-                    "time": time,
-                    "pitch": pitch_inverse_map(tuple[5]),
-                    "duration": resolution * conf.np_durations[tuple[4]],
-                    "velocity": int(tuple[7]),
-                })
-            
             except:
+                # Assign a random instrument from the defined ones
+                idx = np.random.randint(0, len(tracks_instruments))
                 # Comment line below if there are a lot of errors
-                print("Note has instrument {} but the song has only instanciated these ones: {}".format(instrument, tracks_instruments))
+                #print("Note has instrument {} but the song has only instanciated these ones: {}".format(instrument, tracks_instruments))
+            
+            tracks[idx]["notes"].append({
+                "time": time,
+                "pitch": pitch_inverse_map(tuple[5]),
+                "duration": resolution * conf.np_durations[tuple[4]],
+                "velocity": int(tuple[7]),
+            })
 
         if tuple[0] == 4:
             # key signature

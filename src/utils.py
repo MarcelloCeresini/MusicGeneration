@@ -704,6 +704,7 @@ def anti_tranform_representation(song: np.ndarray, conf: config.Config) -> muspy
     key_signatures = []
     tracks = []
     tracks_instruments = []
+    note_times = {}
 
     current_settings = {
         "time": 0,
@@ -732,13 +733,15 @@ def anti_tranform_representation(song: np.ndarray, conf: config.Config) -> muspy
         if tuple[0] == 1:
             # new instrument --> create new track
             program, is_drum = program_inverse_map(tuple[6])
-            tracks.append({
-                "program": int(program),
-                "is_drum": is_drum,
-                "notes": [],
-                "name": str(np.random.randint(1e5)), # TODO: add name
-            })
-            tracks_instruments.append(program)
+
+            if program not in tracks_instruments:
+                tracks.append({
+                    "program": int(program),
+                    "is_drum": is_drum,
+                    "notes": [],
+                    "name": str(np.random.randint(1e5)), # TODO: add name
+                })
+                tracks_instruments.append(program)
 
         if tuple[0] == 2:
             # start of song
@@ -755,13 +758,29 @@ def anti_tranform_representation(song: np.ndarray, conf: config.Config) -> muspy
                 idx = np.random.randint(0, len(tracks_instruments))
                 # Comment line below if there are a lot of errors
                 #print("Note has instrument {} but the song has only instanciated these ones: {}".format(instrument, tracks_instruments))
-            
-            tracks[idx]["notes"].append({
-                "time": time,
-                "pitch": pitch_inverse_map(tuple[5]),
-                "duration": resolution * conf.np_durations[tuple[4]],
-                "velocity": int(tuple[7]),
-            })
+                print("Note that does not belong to any defined instrument --> goes to instrument: ", tracks_instruments[idx])
+
+
+            if time not in note_times.keys():
+                note_times[time] = 1
+                tracks[idx]["notes"].append({
+                        "time": time,
+                        "pitch": pitch_inverse_map(tuple[5]),
+                        "duration": resolution * conf.np_durations[tuple[4]],
+                        "velocity": int(tuple[7]),
+                })
+            else:
+                if note_times[time] < 10:
+
+                    tracks[idx]["notes"].append({
+                        "time": time,
+                        "pitch": pitch_inverse_map(tuple[5]),
+                        "duration": resolution * conf.np_durations[tuple[4]],
+                        "velocity": int(tuple[7]),
+                    })
+                    note_times[time] += 1
+                else:
+                    pass # Too many notes at the same time, fluidsynth would crash
 
         if tuple[0] == 4:
             # key signature
@@ -806,6 +825,41 @@ def anti_tranform_representation(song: np.ndarray, conf: config.Config) -> muspy
             # end of song
             pass
 
+    counter=0
+    index = 0
+    tot_len = len(tracks)
+
+    while counter<tot_len:
+        track = tracks[index]
+
+        if len(track["notes"]) <= 0:
+            # print("track {} to be removed".format(track["program"]))
+            tracks.pop(index)
+
+        else:
+            # print(track["program"], track["is_drum"], track["notes"][:2])
+            index += 1
+        counter += 1
+    
+
+    # print("---------TRACKS THAT GO INTO JSON")
+    # for track in tracks:
+    #     print(track["program"], len(track["notes"]))
+
+    if len(tempos) == 0:
+        standard_qpm = tempo_inverse_map(35, conf) # ~120qpm
+        tempos.append({
+                "time": 0,
+                "qpm": standard_qpm
+        })
+
+    if len(time_signatures) == 0:
+        time_signatures.append({
+                "time": 0,
+                "numerator": 4,
+                "denominator": 4,
+        })
+
     # create dict
     song = {
         "tracks": tracks,
@@ -815,7 +869,7 @@ def anti_tranform_representation(song: np.ndarray, conf: config.Config) -> muspy
         "resolution": resolution,
     }
 
-    # return song
+    # return song # ONLY FOR DEBUGGING
 
     if not os.path.isdir(os.path.join(conf.DATA_PATH, "generation")):
         os.mkdir(os.path.join(conf.DATA_PATH, "generation"))
@@ -825,4 +879,5 @@ def anti_tranform_representation(song: np.ndarray, conf: config.Config) -> muspy
     with open(path, "w") as f:
         json.dump(song, f)
 
-    return muspy.load_json(path)
+    converted_muspy_music_object = muspy.load_json(path)
+    return converted_muspy_music_object

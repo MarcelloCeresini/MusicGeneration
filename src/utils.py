@@ -706,6 +706,8 @@ def anti_tranform_representation(song: np.ndarray, conf: config.Config) -> muspy
     tracks_instruments = []
     note_times = {}
 
+    # TODO: add sorting for "time" before the for loop
+
     current_settings = {
         "time": 0,
         "numerator_time_sign": 4,

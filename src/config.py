@@ -161,9 +161,9 @@ class Config:
         self.PREFETCH_SIZE      = 32
 
         # TRAINING SETUP
-        self.REG_LOSS_SCALE     = 0.00001
+        self.REG_LOSS_SCALE     = 1e-6
         self.MSE_SCALE          = 5
-        self.LEARNING_RATE      = 0.0001
+        self.LEARNING_RATE      = 1e-4
         self.USE_MASKING        = True
         self.DROPOUT_VALUE      = 0.5
 

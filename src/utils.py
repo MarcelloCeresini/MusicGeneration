@@ -317,7 +317,7 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
         3-position,           # index with 1/64 beat length granularity                       [0, 63/64]                                              64
         4-duration,           # hierarchical structure?                                       [0, ~50]                                                136                                  
         5-pitch,              # height of pitch (128) + drums (another 128)                   [0, 255]                                                256
-        6-instrument_type,    # 128 instrument types + 1 for drums                          [0, 255]                                                256
+        6-instrument_type,    # 128 instrument types + 1 for drums                            [0, 255]                                                256
         7-velocity,           # amplitude of note, strength of play                           [0, 127]                                                128
         8-key_sign,           # [0,11] (all possible notes) and [maj,min]                     [0, 23]                                                 24
         9-time_sign,          # denominator pow(2) in [1,64] and numerator int in [0,128]     ??? better to specify after dataset exploration
@@ -457,22 +457,34 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
             5
         ))
 
+    resolution = song.resolution
+
     j = 0
     for track in song.tracks:
+        c=0
         for i, note in enumerate(track.notes):
-            notes[j+i, 0] = note.time
-            notes[j+i, 1] = pitch_map(note.pitch, track.is_drum)
-            notes[j+i, 2] = note.duration
-            notes[j+i, 3] = note.velocity
-            notes[j+i, 4] = track.program
+            if note.duration / resolution < min(conf.np_durations):
+                pass # we don't accept notes with such low durations to clean the dataset
+            else:
+                notes[j+c, 0] = note.time
+                notes[j+c, 1] = pitch_map(note.pitch, track.is_drum)
+                notes[j+c, 2] = note.duration
+                notes[j+c, 3] = note.velocity
+                notes[j+c, 4] = track.program
+                c+=1
         
-        j += len(track.notes)
+        j += c
 
+    notes = notes[:j]
     # sort them by the 0th column, the time
     notes = notes[notes[:,0].argsort()]
 
+    if verbose:
+        for note in notes:
+            print(note)
+
+
     # number of timesteps per beat --> absolute_time = (60*metrical_time)/(tempo_qpm*resolution)
-    resolution = song.resolution
 
     # measure_length = n° of timesteps for each measure = resolution * nominator of time_sign (n° of beats in a measure)
     

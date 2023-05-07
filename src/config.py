@@ -6,8 +6,8 @@ import math
 
 class Config:
     
-    def __init__(self, config_string, root_path, 
-                model_type='GPT', model_name='music_generation_tests'):
+    def __init__(self, config_string, root_path, sequence_length=2048,
+                 model_type='GPT', model_name='music_generation_tests'):
 
         assert model_type in ['GPT', 'XL'], f"Only GPT or XL are available model types. You chose {model_type}."
         self.model_type = model_type
@@ -107,7 +107,7 @@ class Config:
 
         ### MODEL CONFIGURATIONS
         # DECODER
-        self.SEQ_LEN                         = 6144
+        self.SEQ_LEN                         = sequence_length
         self.TOKEN_DIM                       = 512
         self.GENRE_DIM                       = 512
         self.ATTENTION_BLOCKS                = 6
@@ -153,17 +153,19 @@ class Config:
 
         # EMBEDDING LAYERS
         self.SINGLE_EMB_SIZE    = 64
+        
+        self.INTER_HEADS_HIDDEN_SIZES = [128, 256, 128]
 
         # DATASET CONFIGURATIONS
-        self.BATCH_SIZE         = 8 if model_type == 'XL' else 6
+        self.BATCH_SIZE         = 16 if model_type == 'XL' else 8
         self.GLOBAL_BATCH_SIZE  = self.BATCH_SIZE * self.num_devices
         self.SHUFFLE_SIZE       = 256
         self.PREFETCH_SIZE      = 32
 
         # TRAINING SETUP
-        self.REG_LOSS_SCALE     = 0.00001
+        self.REG_LOSS_SCALE     = 1e-6
         self.MSE_SCALE          = 5
-        self.LEARNING_RATE      = 0.0001
+        self.LEARNING_RATE      = 1e-4
         self.USE_MASKING        = True
         self.DROPOUT_VALUE      = 0.5
 
@@ -185,7 +187,7 @@ class Config:
             ),
             tf.keras.callbacks.EarlyStopping(
                 monitor='val_loss',
-                patience=20,
+                patience=10,
                 restore_best_weights=True,
             )
         ]

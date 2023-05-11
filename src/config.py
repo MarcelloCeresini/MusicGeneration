@@ -74,7 +74,7 @@ class Config:
         # Duration
         np_durations = np.zeros(300)
         i = 0
-        note_l = 1 # TODO: change it back to 1/2 if you want to revert durations
+        note_l = 1/2 # TODO: change it back to 1/2 if you want to revert durations
         for _ in range(int(256/16)):
             while np_durations[i] < note_l:
                 i+=1

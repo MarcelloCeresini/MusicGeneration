@@ -316,7 +316,7 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
         2-beat,               # index of beat inside measure                                  [0, numerator of time_signature]                        132 (max numerator allowed)
         3-position,           # index with 1/64 beat length granularity                       [0, 63/64]                                              64
         4-duration,           # hierarchical structure?                                       [0, ~50]                                                136                                  
-        5-pitch,              # height of pitch (128) + drums (another 128)                   [0, 255]                                                256
+        5-pitch,              # height of pitch (128)                                         [0, 127]                                                128
         6-instrument_type,    # 128 instrument types + 1 for drums                            [0, 255]                                                256
         7-velocity,           # amplitude of note, strength of play                           [0, 127]                                                128
         8-key_sign,           # [0,11] (all possible notes) and [maj,min]                     [0, 23]                                                 24
@@ -640,7 +640,7 @@ def transform_representation(song: muspy.music.Music, conf: config.Config, verbo
         print(current_time)
         print(song.metadata)
     
-    # we save npy in uint8, so all the parts of the tuples must be <258
+    # we save npy in uint8, so all the parts of the tuples must be <256
     # (beat is <132 that is the biggest numerator accepted in time signatures)
     if current_measure_index > 255: return [2]
 

@@ -6,7 +6,7 @@ import math
 
 class Config:
     
-    def __init__(self, config_string, root_path, 
+    def __init__(self, config_string, root_path, sequence_length=2048,
                 model_type='GPT', model_name='music_generation_tests'):
 
         assert model_type in ['GPT', 'XL'], f"Only GPT or XL are available model types. You chose {model_type}."
@@ -107,7 +107,7 @@ class Config:
 
         ### MODEL CONFIGURATIONS
         # DECODER
-        self.SEQ_LEN                         = 2048
+        self.SEQ_LEN                         = sequence_length
         self.TOKEN_DIM                       = 512
         self.GENRE_DIM                       = 512
         self.ATTENTION_BLOCKS                = 6
@@ -154,6 +154,8 @@ class Config:
         # EMBEDDING LAYERS
         self.SINGLE_EMB_SIZE    = 64
 
+        self.INTER_HEADS_HIDDEN_SIZES = [128, 256, 128]
+
         # DATASET CONFIGURATIONS
         self.BATCH_SIZE         = 8 if model_type == 'XL' else 6
         self.GLOBAL_BATCH_SIZE  = self.BATCH_SIZE * self.num_devices
@@ -185,7 +187,7 @@ class Config:
             ),
             tf.keras.callbacks.EarlyStopping(
                 monitor='val_loss',
-                patience=20,
+                patience=10,
                 restore_best_weights=True,
             )
         ]

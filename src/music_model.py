@@ -436,13 +436,14 @@ class MaskingActivationLayer(tf.keras.layers.Layer):
 # Model creation function (to be called within a scope in case of MultiGPU training)
 def create_model(conf:Config, input_shape=None, num_genres=None, 
                  use_regularization=True, use_masking_layers=True, 
-                 use_mse_for_velocity=True, reg_loss_scale=None):
+                 use_mse_for_velocity=True, reg_loss_scale=None,
+                 double_head=False):
     '''
     General model creation function. By default it generates a model which uses regulariazion and doesn't use
     masking, but this can be changed by manipulating the boolean flags `use_regularization` and `use_masking_layers`.
     It requires a `Config` object containing all hyperparameters of the model and optionally accepts an input shape, 
     the number of possible genres for classification, and a regularization scaling factor. Also, it has an additional
-    parameter for setting MSE as a loss for velocity rather than cross-entropy.
+    parameter for setting MSE as a loss for velocity rather than cross-entropy, and one for enabling the double-head behaviour to mix the output probabilities.
     '''
     # Defaults taken from conf object
     if input_shape is None:
@@ -575,6 +576,37 @@ def create_model(conf:Config, input_shape=None, num_genres=None,
         # Tempo
         tf.keras.layers.Softmax(name='tempo_probabilities')
     ]
+
+    if double_head:
+        double_head_concatter = tf.keras.layers.Concatenate(axis=-1)
+        inter_heads_hidden_layers = tf.keras.Sequential(layers=[tf.keras.layers.BatchNormalization()] + [
+            tf.keras.layers.Dense(i, activation='relu')
+            for i in conf.INTER_HEADS_HIDDEN_SIZES
+        ])
+        second_head_layers = [
+            # Type
+            tf.keras.layers.Dense(conf.INPUT_RANGES['type'], name='type_final_probabilities', activation="softmax"),
+            # Measure
+            tf.keras.layers.Dense(conf.INPUT_RANGES['measure'], name='measure_final_probabilities', activation="softmax"),
+            # Beat
+            tf.keras.layers.Dense(conf.INPUT_RANGES['beat'], name='beat_final_probabilities', activation="softmax"),
+            # Position
+            tf.keras.layers.Dense(conf.INPUT_RANGES['position'], name='position_final_probabilities', activation="softmax"),
+            # Duration
+            tf.keras.layers.Dense(conf.INPUT_RANGES['duration'], name='duration_final_probabilities', activation="softmax"),
+            # Pitch
+            tf.keras.layers.Dense(conf.INPUT_RANGES['pitch'], name='pitch_final_probabilities', activation="softmax"),
+            # Instrument
+            tf.keras.layers.Dense(conf.INPUT_RANGES['instrument'], name='instrument_final_probabilities', activation="softmax"),
+            # Velocity
+            tf.keras.layers.Dense(1, name='velocity_final_values', activation="relu"),
+            # Key sign
+            tf.keras.layers.Dense(conf.INPUT_RANGES['key_sign'], name='keysign_final_probabilities', activation="softmax"),
+            # Time sign
+            tf.keras.layers.Dense(conf.INPUT_RANGES['time_sign'], name='timesign_final_probabilities', activation="softmax"),
+            # Tempo
+            tf.keras.layers.Dense(conf.INPUT_RANGES['tempo'], name='tempo_final_probabilities', activation="softmax")
+        ]
     
     # Model dynamics
     embeddings        = [embedding_layers[i](songs[:,:,i]) for i in range(events_elements)]
@@ -611,11 +643,21 @@ def create_model(conf:Config, input_shape=None, num_genres=None,
     else:
         out_values = [output_layers[i](out_scores[i]) 
                       for i in range(len(output_dense_layers))]
-                
-    out_dict = {
-        key: out_values[i] 
-        for i, key in enumerate(conf.INPUT_RANGES)
-    }
+        
+    if double_head:
+        x = double_head_concatter(out_values)
+        x = inter_heads_hidden_layers(x)
+        final_out = [second_head_layers[i](x)
+                    for i in range(len(second_head_layers))]
+        out_dict  = {
+            key: final_out[i]
+            for i, key in enumerate(conf.INPUT_RANGES)
+        }
+    else:
+        out_dict = {
+            key: out_values[i] 
+            for i, key in enumerate(conf.INPUT_RANGES)
+        }
 
     # Create model
     model = tf.keras.Model(inputs=[songs, genres], 
@@ -700,6 +742,10 @@ def create_model(conf:Config, input_shape=None, num_genres=None,
         gt = tf.boolean_mask(songs[:,:,i], end_song_mask)
         pred = tf.boolean_mask(out_values[i], end_song_mask)
         loss = custom_loss(y_true = gt, y_pred = pred, key = k)
+        if double_head:
+            pred_level_2 = tf.boolean_mask(final_out[i], end_song_mask)
+            loss_level_2 = custom_loss(y_true = gt, y_pred = pred_level_2, key = k)
+            loss = (loss / 100) + loss_level_2
         model.add_loss(loss)
         model.add_metric(loss, name=loss_name)
     

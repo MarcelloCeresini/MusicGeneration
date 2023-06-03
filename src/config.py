@@ -102,6 +102,8 @@ class Config:
             "latin","jazz","funk","rap","punk","r&b", 
             "gospel","electronic"
         ]
+
+        self.genre_classification_threshold = 0.9
         # USE THIS FOR THE SMALL DATASET
         # self.accepted_subgenres = ['folk', 'nes', 'maestro']
 

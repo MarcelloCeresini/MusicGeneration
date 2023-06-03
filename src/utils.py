@@ -5,6 +5,7 @@ import os, shutil, tarfile
 from tqdm import tqdm
 import tensorflow as tf
 import json
+from sklearn.metrics import classification_report
 
 import config
 
@@ -895,3 +896,71 @@ def anti_tranform_representation(song: np.ndarray, conf: config.Config) -> muspy
 
     converted_muspy_music_object = muspy.load_json(path)
     return converted_muspy_music_object
+
+
+def metrics_classification_report(gt_genre_vectors, predicted_genre_vectors, conf:config.Config):
+
+    bool_gt_array = np.zeros(len(gt_genre_vectors), len(conf.accepted_subgenres))
+    bool_pred_array = np.zeros_like(bool_gt_array)
+
+    for i, (gt_genre, predicted_genre) in tqdm(enumerate(zip(gt_genre_vectors, predicted_genre_vectors))):
+
+        bool_gt_array[i, :] = gt_genre>0
+
+        n_genres = np.sum(bool_gt_array[i, :])
+        bool_pred_array[i, :] = (predicted_genre*n_genres) > conf.genre_classification_threshold
+
+    return classification_report(bool_gt_array, bool_pred_array, target_names=conf.accepted_subgenres, output_dict=True)
+
+
+# def metric_from_c_matrix(confusion_matrix_one_class, metric):
+#     c = confusion_matrix_one_class
+
+#     if metric == "accuracy":
+#         return (c[0,0]+c[1,1])/np.sum(c)
+#     elif metric == "precision":
+#         return c[0,0]/(c[0,0], c[1,0])
+#     elif metric == "recall":
+#         return c[0,0]/(c[0,0], c[0,1])
+#     elif metric == "f1_score":
+#         precision   = c[0,0]/(c[0,0], c[1,0])
+#         recall      = c[0,0]/(c[0,0], c[0,1])
+#         return 2*precision*recall / (precision+recall)
+#     else:
+#         raise ValueError("{} is not an implemented metric yet".format(metric))
+
+
+# def metrics(confusion_matrix: np.array):
+#     c = confusion_matrix
+#     n_labels = c.shape()[0]
+
+#     # TP FN
+#     # FP TN
+#     accuracy_per_class  = [metric_from_c_matrix(c[i,...], "accuracy")  for i in range(n_labels)]
+#     precision_per_class = [metric_from_c_matrix(c[i,...], "precision") for i in range(n_labels)]
+#     recall_per_class    = [metric_from_c_matrix(c[i,...], "recall")    for i in range(n_labels)]
+#     f1_per_class        = [metric_from_c_matrix(c[i,...], "f1_score")  for i in range(n_labels)]
+
+#     macro_accuracy  = np.mean(accuracy_per_class)
+#     macro_precision = np.mean(precision_per_class)
+#     macro_recall    = np.mean(recall_per_class)
+#     macro_f1        = np.mean(f1_per_class)
+
+#     summed_classes = np.sum(c, axis=0)
+#     micro_accuracy  = metric_from_c_matrix(summed_classes, "accuracy")
+#     micro_precision = metric_from_c_matrix(summed_classes, "precision")
+#     micro_recall    = metric_from_c_matrix(summed_classes, "recall")
+#     micro_f1        = metric_from_c_matrix(summed_classes, "f1_score")
+
+#     samples_per_class = np.sum(c, axis=[1, 2])
+#     total_samples = np.sum(samples_per_class)
+
+#     weighted_accuracy   = accuracy_per_class*   samples_per_class/total_samples
+#     weighted_precision  = precision_per_class*  samples_per_class/total_samples
+#     weighted_recall     = recall_per_class*     samples_per_class/total_samples
+#     weighted_f1         = f1_per_class*         samples_per_class/total_samples
+
+
+
+
+#     return None # TODO: finish it

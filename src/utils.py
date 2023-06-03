@@ -898,7 +898,7 @@ def anti_tranform_representation(song: np.ndarray, conf: config.Config) -> muspy
     return converted_muspy_music_object
 
 
-def metrics_classification_report(gt_genre_vectors, predicted_genre_vectors, conf:config.Config):
+def metrics_classification_report(gt_genre_vectors, predicted_genre_vectors, conf:config.Config) -> dict:
 
     bool_gt_array = np.zeros(len(gt_genre_vectors), len(conf.accepted_subgenres))
     bool_pred_array = np.zeros_like(bool_gt_array)

@@ -900,7 +900,7 @@ def anti_tranform_representation(song: np.ndarray, conf: config.Config) -> muspy
 
 def metrics_classification_report(gt_genre_vectors, predicted_genre_vectors, conf:config.Config) -> dict:
 
-    bool_gt_array = np.zeros(len(gt_genre_vectors), len(conf.accepted_subgenres))
+    bool_gt_array = np.zeros((len(gt_genre_vectors), len(conf.accepted_subgenres)))
     bool_pred_array = np.zeros_like(bool_gt_array)
 
     for i, (gt_genre, predicted_genre) in tqdm(enumerate(zip(gt_genre_vectors, predicted_genre_vectors))):
@@ -908,7 +908,7 @@ def metrics_classification_report(gt_genre_vectors, predicted_genre_vectors, con
         bool_gt_array[i, :] = gt_genre>0
 
         n_genres = np.sum(bool_gt_array[i, :])
-        bool_pred_array[i, :] = (predicted_genre*n_genres) > conf.genre_classification_threshold
+        bool_pred_array[i, :] = (predicted_genre*n_genres) >= conf.genre_classification_threshold
 
     return classification_report(bool_gt_array, bool_pred_array, target_names=conf.accepted_subgenres, output_dict=True)
 
